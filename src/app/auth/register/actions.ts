@@ -17,6 +17,11 @@ function slugify(name: string) {
 
 export type RegisterState = { ok?: boolean; error?: string }
 
+function trialEndsAt() {
+  const days = Number(process.env.TRIAL_PERIOD_DAYS) || 14
+  return new Date(Date.now() + days * 24 * 60 * 60 * 1000)
+}
+
 export async function registerOrganization(_prev: RegisterState, formData: FormData): Promise<RegisterState> {
   try {
     const ownerName = String(formData.get('ownerName') || '').trim()
@@ -74,7 +79,7 @@ export async function registerOrganization(_prev: RegisterState, formData: FormD
           ownerUserId: user.id,
           status: 'active',
           subscriptionPlanId: null,
-          subscriptionEndsAt: null,
+          subscriptionEndsAt: trialEndsAt(),
           members: {
             create: { userId: user.id, role: 'landlord_admin' },
           },
