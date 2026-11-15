@@ -28,6 +28,8 @@ import {
   AlertCircle,
   Clock,
   TrendingUp,
+  DoorOpen,
+  UserX,
 } from 'lucide-react'
 import { MobileNav } from '@/components/mobile-nav'
 
@@ -189,6 +191,7 @@ export default async function MaskaniPage({ searchParams }: { searchParams: Prom
   }
 
   const totalOutstanding = unpaidInvoices.reduce((sum, inv) => sum + (inv.amountDue - inv.amountPaid), 0)
+  const owingTenants = new Set(unpaidInvoices.map((inv) => inv.tenantUserId)).size
 
   const incomeCards = [
     { label: 'Income Today', value: income.today, hint: 'Since midnight', icon: Wallet, gradient: 'from-cyan-400 via-sky-500 to-blue-600', glow: 'shadow-sky-500/30' },
@@ -213,6 +216,8 @@ export default async function MaskaniPage({ searchParams }: { searchParams: Prom
     { label: 'Units', value: c.units, sub: `${occupiedUnits} occupied · ${vacantUnits} vacant`, icon: Home, color: 'text-emerald-600 dark:text-emerald-300', bg: 'bg-emerald-500/15', ring: 'hover:ring-emerald-400/40', href: `/maskani/properties${orgQuery}` },
     { label: 'Occupancy', value: `${occupancy}%`, sub: c.units ? `${occupiedUnits}/${c.units} units` : 'No units yet', icon: Users, color: 'text-violet-600 dark:text-violet-300', bg: 'bg-violet-500/15', ring: 'hover:ring-violet-400/40', href: `/maskani/properties${orgQuery}` },
     { label: 'Open Issues', value: openTickets + unpaidInvoices.length, sub: `${openTickets} tickets · ${unpaidInvoices.length} unpaid invoices`, icon: Wrench, color: 'text-amber-600 dark:text-amber-300', bg: 'bg-amber-500/15', ring: 'hover:ring-amber-400/40', href: `/maskani/invoices${orgQuery}` },
+    { label: 'Vacant Units', value: vacantUnits, sub: c.units ? `${vacantUnits} of ${c.units} units available` : 'No units yet', icon: DoorOpen, color: 'text-sky-600 dark:text-sky-300', bg: 'bg-sky-500/15', ring: 'hover:ring-sky-400/40', href: `/maskani/properties${orgQuery}` },
+    { label: 'Tenants Owing', value: owingTenants, sub: owingTenants ? `${unpaidInvoices.length} invoices · ${formatCurrency(totalOutstanding, currency)} outstanding` : 'All balances clear', icon: UserX, color: owingTenants ? 'text-rose-600 dark:text-rose-300' : 'text-emerald-600 dark:text-emerald-300', bg: owingTenants ? 'bg-rose-500/15' : 'bg-emerald-500/15', ring: owingTenants ? 'hover:ring-rose-400/40' : 'hover:ring-emerald-400/40', href: `/maskani/invoices${orgQuery}` },
   ]
 
   return (
@@ -300,7 +305,7 @@ export default async function MaskaniPage({ searchParams }: { searchParams: Prom
               </div>
             </section>
 
-            <div className="mb-8 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="mb-8 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
               {statStyles.map((s) => {
                 const Icon = s.icon
                 return (
