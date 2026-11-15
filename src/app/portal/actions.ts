@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { initiateInvoicePayment, type InitiateResult } from '@/lib/payments'
+import { syncOrganizationSubscription } from '@/lib/subscription-enforcement'
 import type { PaymentGatewayProvider } from '@prisma/client'
 
 async function requireTenant() {
@@ -17,6 +18,11 @@ async function requireTenant() {
   })
   if (!membership) throw new Error('No tenant membership found')
   return { session, membership }
+}
+
+async function assertOrgOperational(organizationId: string) {
+  const sub = await syncOrganizationSubscription(organizationId)
+  if (sub.isSuspended) throw new Error('This organization\'s portal is suspended. Please contact your landlord.')
 }
 
 async function tenantUnitId(organizationId: string, userId: string, memberUnitId: string | null) {
@@ -52,6 +58,7 @@ export async function tenantPayInvoice(input: {
 
 export async function tenantCreateTicket(formData: FormData) {
   const { session, membership } = await requireTenant()
+  await assertOrgOperational(membership.organizationId)
   const unitId = await tenantUnitId(membership.organizationId, session.user.id, membership.unitId)
   if (!unitId) throw new Error('No unit is assigned to your account yet')
 
@@ -81,6 +88,7 @@ export async function tenantCreateTicket(formData: FormData) {
 
 export async function tenantCreateComplaint(formData: FormData) {
   const { session, membership } = await requireTenant()
+  await assertOrgOperational(membership.organizationId)
   const unitId = await tenantUnitId(membership.organizationId, session.user.id, membership.unitId)
 
   const subject = String(formData.get('subject') || '').trim()

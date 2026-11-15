@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { headers, cookies } from 'next/headers'
 import { getTenantHost } from '@/lib/tenant-domain'
 import { getSavedCurrency } from '@/lib/currency'
+import { syncOrganizationSubscription } from '@/lib/subscription-enforcement'
 import { PropertiesManager } from './properties-manager'
 
 export const instant = false
@@ -43,6 +44,8 @@ export default async function PropertiesPage({ searchParams }: { searchParams: P
     }
     org = membership.organization
     roleLabel = membership.role.replace('_', ' ')
+    const sub = await syncOrganizationSubscription(org.id)
+    if (sub.isSuspended) redirect('/maskani/suspended')
   }
 
   const hdrs = await headers()
