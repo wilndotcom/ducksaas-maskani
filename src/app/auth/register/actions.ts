@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs'
 import { redirect } from 'next/navigation'
 import { provisionOrgFromMaster } from '@/lib/organization-template'
 import { rateLimit, clientIp } from '@/lib/rate-limit'
+import { generateUniqueUsername } from '@/lib/username'
 import { headers } from 'next/headers'
 
 function slugify(name: string) {
@@ -71,7 +72,7 @@ export async function registerOrganization(_prev: RegisterState, formData: FormD
         data: {
           name: ownerName,
           email,
-          username: username || null,
+          username: username || (await generateUniqueUsername({ email, name: ownerName })),
           phone: phone || null,
           passwordHash,
           globalRole: 'standard',

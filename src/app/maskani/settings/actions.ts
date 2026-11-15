@@ -9,6 +9,7 @@ import { ADMIN_RIGHT_KEYS } from './rights'
 import { assertOrganizationWritable } from '@/lib/subscription-enforcement'
 import { requireMaskaniPermission } from '@/lib/maskani'
 import { sendWelcomeEmail } from '@/lib/email'
+import { generateUniqueUsername } from '@/lib/username'
 import { initiateSubscriptionPayment, type SubscriptionInitiateResult } from '@/lib/platform-billing'
 import type { BillingCycle } from '@/lib/saas-billing'
 import { Prisma } from '@prisma/client'
@@ -74,7 +75,7 @@ export async function addOrganizationAdmin(formData: FormData) {
     } else {
       const passwordHash = await bcrypt.hash(password, 10)
       const created = await prisma.user.create({
-        data: { name, email, phone: phone || null, passwordHash, globalRole: 'standard' },
+        data: { name, email, username: await generateUniqueUsername({ email, name }), phone: phone || null, passwordHash, globalRole: 'standard' },
         select: { id: true },
       })
       userId = created.id

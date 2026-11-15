@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import bcrypt from 'bcryptjs'
 import { sendWelcomeEmail } from '@/lib/email'
+import { generateUniqueUsername } from '@/lib/username'
 import { requireMaskaniPermission, resolveActionOrgId } from '@/lib/maskani'
 
 const resolveOrgId = (orgParam?: string | null) => resolveActionOrgId(orgParam, 'maskani.tenants')
@@ -46,6 +47,7 @@ export async function createLease(formData: FormData) {
       data: {
         name: tenantName,
         email: tenantEmail,
+        username: await generateUniqueUsername({ email: tenantEmail, name: tenantName }),
         phone: tenantPhone || null,
         passwordHash,
         globalRole: 'standard',

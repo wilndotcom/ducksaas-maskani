@@ -7,6 +7,7 @@ import { authOptions } from '@/lib/auth'
 import bcrypt from 'bcryptjs'
 import { provisionOrgFromMaster } from '@/lib/organization-template'
 import { calculatePlanAmount, type BillingCycle, type PlanPricing } from '@/lib/saas-billing'
+import { generateUniqueUsername } from '@/lib/username'
 
 async function ensureAdmin() {
   const session = await getServerSession(authOptions)
@@ -45,6 +46,7 @@ async function resolveOwnerId(formData: FormData) {
       data: {
         name: ownerName,
         email: ownerEmail,
+        username: await generateUniqueUsername({ email: ownerEmail, name: ownerName }),
         phone: ownerPhone || null,
         passwordHash,
         globalRole: 'standard',
