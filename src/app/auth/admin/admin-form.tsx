@@ -77,7 +77,8 @@ export function AdminSignInForm() {
                   <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <input
                     id="email"
-                    type="email"
+                    type="text"
+                    autoComplete="username"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required

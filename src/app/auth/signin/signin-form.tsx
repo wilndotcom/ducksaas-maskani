@@ -54,13 +54,13 @@ export function SignInForm() {
       <div className="relative z-10 mx-auto flex min-h-screen max-w-md items-center px-6 py-10">
         <div className="w-full">
           <div className="mb-8 text-center">
-            <Link href="/" className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-white">
-              <Sparkles className="h-4 w-4 text-fuchsia-400" /> DuckSaaS &amp; Maskani
-            </Link>
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-fuchsia-400/30 bg-fuchsia-500/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-fuchsia-200">
+              <Sparkles className="h-3.5 w-3.5" /> Maskani Workspace
+            </div>
             <h1 className="text-3xl font-extrabold sm:text-4xl">
               Welcome <span className="bg-gradient-to-r from-fuchsia-400 via-cyan-300 to-emerald-300 bg-clip-text text-transparent">back</span>
             </h1>
-            <p className="mt-2 text-slate-300">Sign in to Maskani — your property workspace or tenant portal</p>
+            <p className="mt-2 text-slate-300">Sign in to your property workspace or tenant portal</p>
           </div>
 
           <div className="rounded-3xl border border-white/10 bg-white/10 p-6 shadow-2xl backdrop-blur-xl sm:p-8">
@@ -84,7 +84,8 @@ export function SignInForm() {
                   <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <input
                     id="email"
-                    type="email"
+                    type="text"
+                    autoComplete="username"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
@@ -129,15 +130,26 @@ export function SignInForm() {
                 <Link href="/auth/register" className="font-medium text-cyan-300 hover:text-cyan-200">Register your organization</Link>
               </p>
               <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
-                <p className="mb-2 text-center text-sm font-medium text-slate-200">Demo credentials</p>
-                <div className="space-y-1.5 text-xs text-slate-400">
-                  <p><span className="text-cyan-300">Landlord:</span> landlord1 / landlord123</p>
-                  <p><span className="text-emerald-300">Tenant:</span> tenant1 / tenant123</p>
+                <p className="mb-3 text-center text-sm font-medium text-slate-200">Demo credentials</p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-lg border border-cyan-400/20 bg-cyan-500/10 p-3">
+                    <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-cyan-300">Landlord</p>
+                    <div className="space-y-1 text-xs text-slate-400">
+                      <p><span className="text-slate-300">Username:</span> landlord1</p>
+                      <p><span className="text-slate-300">Email:</span> john@landlord1.com</p>
+                      <p><span className="text-slate-300">Password:</span> landlord123</p>
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-emerald-400/20 bg-emerald-500/10 p-3">
+                    <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-emerald-300">Tenant</p>
+                    <div className="space-y-1 text-xs text-slate-400">
+                      <p><span className="text-slate-300">Username:</span> tenant1</p>
+                      <p><span className="text-slate-300">Email:</span> mary@tenant.com</p>
+                      <p><span className="text-slate-300">Password:</span> tenant123</p>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <p className="mt-3 text-center text-xs text-slate-400">
-                Platform administrator? <Link href="/auth/admin" className="font-medium text-cyan-300 hover:text-cyan-200">Use the admin sign in</Link>
-              </p>
             </div>
           </div>
 
