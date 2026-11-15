@@ -6,7 +6,20 @@ const prisma = new PrismaClient()
 async function main() {
   console.log('🌱 Starting seed...')
 
+  // Safety guard: this seed wipes ALL data. Require explicit opt-in.
+  const confirmed = process.env.SEED_CONFIRM === '1' || process.argv.includes('--force')
+  if (!confirmed) {
+    console.error('❌ Aborting: seed deletes ALL data. Re-run with SEED_CONFIRM=1 or --force to proceed.')
+    process.exit(1)
+  }
+
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD || 'admin123'
+  if (!process.env.SEED_ADMIN_PASSWORD) {
+    console.warn('⚠️  SEED_ADMIN_PASSWORD not set — using default "admin123" (dev only!)')
+  }
+
   // Clean existing data
+  await prisma.paymentSession.deleteMany()
   await prisma.maintenanceTicket.deleteMany()
   await prisma.rentPayment.deleteMany()
   await prisma.invoice.deleteMany()
@@ -21,8 +34,8 @@ async function main() {
   await prisma.user.deleteMany()
 
   // Create Super Admin
-  const superAdminPassword = await bcrypt.hash('admin123', 10)
-  const superAdmin = await prisma.user.create({
+  const superAdminPassword = await bcrypt.hash(adminPassword, 10)
+  await prisma.user.create({
     data: {
       name: 'Super Admin',
       email: 'admin@ducksaas.com',
@@ -68,7 +81,7 @@ async function main() {
     }
   })
 
-  const enterprisePlan = await prisma.subscriptionPlan.create({
+  await prisma.subscriptionPlan.create({
     data: {
       name: 'Enterprise',
       priceMonthly: 199,
@@ -321,7 +334,7 @@ async function main() {
 
   console.log('🎉 Seed completed successfully!')
   console.log('\n📝 Test Credentials:')
-  console.log('Super Admin: admin@ducksaas.com / admin123')
+  console.log(`Super Admin: admin@ducksaas.com / ${process.env.SEED_ADMIN_PASSWORD ? '(from SEED_ADMIN_PASSWORD)' : 'admin123'}`)
   console.log('Landlord 1: john@landlord1.com / landlord123')
   console.log('Landlord 2: sarah@landlord2.com / landlord123')
   console.log('Tenant: mary@tenant.com / tenant123')

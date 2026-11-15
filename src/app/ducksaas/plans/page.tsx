@@ -19,5 +19,5 @@ export default async function PlansPage() {
     prisma.organization.count(),
   ])
 
-  return <PlansManager plans={plans as any} totalOrgs={totalOrgs} currency={currency} />
+  return <PlansManager plans={plans} totalOrgs={totalOrgs} currency={currency} />
 }

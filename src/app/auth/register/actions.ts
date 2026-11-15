@@ -4,6 +4,8 @@ import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { redirect } from 'next/navigation'
 import { provisionOrgFromMaster } from '@/lib/organization-template'
+import { rateLimit, clientIp } from '@/lib/rate-limit'
+import { headers } from 'next/headers'
 
 function slugify(name: string) {
   return name
@@ -29,6 +31,12 @@ export async function registerOrganization(_prev: RegisterState, formData: FormD
     }
     if (password.length < 8) {
       return { error: 'Password must be at least 8 characters.' }
+    }
+
+    const hdrs = await headers()
+    const ip = clientIp(hdrs)
+    if (!rateLimit(`register:ip:${ip}`, 10, 60 * 60 * 1000) || !rateLimit(`register:email:${email}`, 5, 60 * 60 * 1000)) {
+      return { error: 'Too many registration attempts. Please try again later.' }
     }
     if (!slug) slug = slugify(orgName)
     slug = slugify(slug)

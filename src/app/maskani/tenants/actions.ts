@@ -2,30 +2,11 @@
 
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { assertOrganizationWritable } from '@/lib/subscription-enforcement'
-import { requireMaskaniPermission } from '@/lib/maskani'
+import bcrypt from 'bcryptjs'
+import { sendWelcomeEmail } from '@/lib/email'
+import { requireMaskaniPermission, resolveActionOrgId } from '@/lib/maskani'
 
-async function resolveOrgId(orgParam?: string | null) {
-  const session = await getServerSession(authOptions)
-  if (!session) throw new Error('Unauthorized')
-  if (session.user.globalRole === 'super_admin') {
-    if (!orgParam) throw new Error('Organization is required')
-    const org = await prisma.organization.findUnique({ where: { id: orgParam }, select: { id: true } })
-    if (!org) throw new Error('Organization not found')
-    await assertOrganizationWritable(org.id)
-    return org.id
-  }
-  const membership = await prisma.organizationMember.findFirst({
-    where: { userId: session.user.id },
-    select: { organizationId: true },
-    orderBy: { createdAt: 'asc' },
-  })
-  if (!membership) throw new Error('No organization membership found')
-  await assertOrganizationWritable(membership.organizationId)
-  return membership.organizationId
-}
+const resolveOrgId = (orgParam?: string | null) => resolveActionOrgId(orgParam, 'maskani.tenants')
 
 export async function createLease(formData: FormData) {
   const orgId = await resolveOrgId(String(formData.get('orgId') || ''))
@@ -44,12 +25,35 @@ export async function createLease(formData: FormData) {
   const end = new Date(endDate)
   if (isNaN(start.getTime()) || isNaN(end.getTime()) || end <= start) throw new Error('Provide valid start/end dates (end must be after start)')
 
-  const [unit, tenant] = await Promise.all([
+  const tenantName = String(formData.get('tenantName') || '').trim()
+  const tenantPhone = String(formData.get('tenantPhone') || '').trim()
+  const tenantPassword = String(formData.get('tenantPassword') || '')
+
+  const [unit, existingTenant] = await Promise.all([
     prisma.unit.findFirst({ where: { id: unitId, organizationId: orgId }, select: { id: true } }),
     prisma.user.findUnique({ where: { email: tenantEmail }, select: { id: true } }),
   ])
   if (!unit) throw new Error('Selected unit not found in this organization')
-  if (!tenant) throw new Error('No user found with that email. Tenant must have an account first.')
+
+  let tenant = existingTenant
+  let createdTenantAccount = false
+  if (!tenant) {
+    // No account yet — create one inline so the tenant can sign in to the portal.
+    if (!tenantName) throw new Error('Tenant name is required to create a new account')
+    if (tenantPassword.length < 8) throw new Error('Password must be at least 8 characters to create a new tenant account')
+    const passwordHash = await bcrypt.hash(tenantPassword, 10)
+    tenant = await prisma.user.create({
+      data: {
+        name: tenantName,
+        email: tenantEmail,
+        phone: tenantPhone || null,
+        passwordHash,
+        globalRole: 'standard',
+      },
+      select: { id: true },
+    })
+    createdTenantAccount = true
+  }
 
   await prisma.$transaction(async (tx) => {
     await tx.lease.create({
@@ -72,6 +76,17 @@ export async function createLease(formData: FormData) {
       await tx.unit.update({ where: { id: unitId }, data: { status: 'occupied' } })
     }
   })
+
+  if (createdTenantAccount) {
+    const org = await prisma.organization.findUnique({ where: { id: orgId }, select: { name: true } })
+    sendWelcomeEmail({
+      to: tenantEmail,
+      name: tenantName,
+      orgName: org?.name || 'your property manager',
+      role: 'tenant',
+      tempPassword: tenantPassword || undefined,
+    }).catch(() => {})
+  }
 
   revalidatePath('/maskani')
   revalidatePath('/maskani/tenants')

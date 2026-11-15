@@ -2,14 +2,32 @@ import { NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { prisma } from '@/lib/prisma'
 import { notifyTelegram } from '@/lib/telegram'
-
-export const runtime = 'nodejs'
+import { applySuccessfulPayment, findPaymentSessionByGateway, markPaymentSession } from '@/lib/payments'
+import { activateSubscriptionFromSession } from '@/lib/platform-billing'
 
 function safeEqual(a: string, b: string) {
   const ba = Buffer.from(a)
   const bb = Buffer.from(b)
   if (ba.length !== bb.length) return false
   return crypto.timingSafeEqual(ba, bb)
+}
+
+type DarajaCallback = {
+  MerchantRequestID?: string
+  CheckoutRequestID?: string
+  ResultCode?: number
+  ResultDesc?: string
+  CallbackMetadata?: { Item?: { Name: string; Value?: unknown }[] }
+}
+
+function parseDarajaCallback(body: { Body?: { stkCallback?: DarajaCallback } }): { callback: DarajaCallback | null; items: Record<string, unknown> } {
+  const cb = body?.Body?.stkCallback as DarajaCallback | undefined
+  if (!cb) return { callback: null, items: {} }
+  const items: Record<string, unknown> = {}
+  for (const item of cb.CallbackMetadata?.Item || []) {
+    if (item?.Name) items[item.Name] = item.Value
+  }
+  return { callback: cb, items }
 }
 
 export async function POST(req: Request) {
@@ -25,8 +43,73 @@ export async function POST(req: Request) {
       }
     }
 
-    // Expected normalized payload shape (adapt as needed to Daraja callback mapping):
-    // { organizationId, invoiceId, amount, reference, paidAt }
+    // --- Real Daraja STK push callback ---
+    const { callback: stk, items } = parseDarajaCallback(body)
+    if (stk) {
+      const checkoutRequestId = String(stk.CheckoutRequestID || '')
+      const resultCode = Number(stk.ResultCode ?? -1)
+      if (resultCode !== 0) {
+        await markPaymentSession({ checkoutRequestId, status: 'failed', failureReason: stk.ResultDesc || `ResultCode ${resultCode}` })
+        await notifyTelegram('M-Pesa STK payment failed/cancelled', { event: 'mpesa_stk_failed', checkoutRequestId, resultCode, resultDesc: stk.ResultDesc })
+        return NextResponse.json({ ok: true, result: 'failed' })
+      }
+
+      const session = await findPaymentSessionByGateway({ checkoutRequestId })
+      if (!session) {
+        await notifyTelegram('M-Pesa webhook ignored: unknown checkout request', { event: 'mpesa_unknown_session', checkoutRequestId })
+        return NextResponse.json({ ok: true, ignored: true, reason: 'session_not_found' })
+      }
+      if (session.status !== 'pending') {
+        return NextResponse.json({ ok: true, idempotent: true })
+      }
+
+      const amount = Number(items.Amount ?? session.amount)
+      const reference = String(items.MpesaReceiptNumber || items.TransID || session.reference || checkoutRequestId)
+
+      // Subscription (SaaS plan) payments activate/extend the org subscription
+      if (session.kind === 'subscription') {
+        const result = await activateSubscriptionFromSession(session, reference)
+        return NextResponse.json({ ok: true, subscription: result })
+      }
+      if (!session.invoiceId) {
+        await notifyTelegram('M-Pesa webhook ignored: session has no invoice', { event: 'mpesa_session_no_invoice', sessionId: session.id })
+        return NextResponse.json({ ok: true, ignored: true, reason: 'no_invoice' })
+      }
+
+      const paidAt = items.TransactionDate ? new Date(String(items.TransactionDate)) : new Date()
+
+      const result = await applySuccessfulPayment({
+        organizationId: session.organizationId,
+        invoiceId: session.invoiceId,
+        amount: Number.isFinite(amount) && amount > 0 ? amount : session.amount,
+        paymentMethod: 'mpesa_stk',
+        gatewayReference: reference,
+        paidAt: isNaN(paidAt.getTime()) ? new Date() : paidAt,
+        sessionId: session.id,
+      })
+
+      if ('overpaid' in result) {
+        await notifyTelegram('M-Pesa webhook rejected: overpayment', { event: 'mpesa_webhook_overpay', invoiceId: session.invoiceId, amount, due: result.amountDue })
+        return NextResponse.json({ ok: false, error: 'overpayment' }, { status: 400 })
+      }
+      if ('notFound' in result) {
+        return NextResponse.json({ ok: true, ignored: true, reason: 'invoice_not_found' })
+      }
+      if ('duplicate' in result) {
+        return NextResponse.json({ ok: true, idempotent: true })
+      }
+
+      await notifyTelegram('M-Pesa STK payment recorded via webhook', {
+        event: 'mpesa_stk_payment_recorded',
+        organizationId: session.organizationId,
+        invoiceId: session.invoiceId,
+        amount,
+        reference,
+      })
+      return NextResponse.json({ ok: true })
+    }
+
+    // --- Normalized payload fallback: { organizationId, invoiceId, amount, reference, paidAt } ---
     const organizationId = String(body.organizationId || body.orgId || '')
     const invoiceId = String(body.invoiceId || '')
     const amount = Number(body.amount || body.Amount || 0)
@@ -44,42 +127,32 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, ignored: true, reason: 'invoice_not_found' })
     }
 
-    // Idempotency by gateway reference
-    if (reference) {
-      const existing = await prisma.rentPayment.findFirst({ where: { organizationId, gatewayReference: reference } })
-      if (existing) {
-        return NextResponse.json({ ok: true, idempotent: true })
-      }
-    }
-
     const paidAt = paidAtStr ? new Date(paidAtStr) : new Date()
-    const safePaidAt = isNaN(paidAt.getTime()) ? new Date() : paidAt
-    const newPaid = invoice.amountPaid + amount
-    if (newPaid > invoice.amountDue + 0.01) {
-      await notifyTelegram('M-Pesa webhook rejected: overpayment', { event: 'mpesa_webhook_overpay', organizationId, invoiceId, amount, due: invoice.amountDue, paid: invoice.amountPaid })
+    const result = await applySuccessfulPayment({
+      organizationId,
+      invoiceId: invoice.id,
+      amount,
+      paymentMethod: 'mpesa_c2b',
+      gatewayReference: reference || null,
+      paidAt: isNaN(paidAt.getTime()) ? new Date() : paidAt,
+    })
+
+    if ('overpaid' in result) {
+      await notifyTelegram('M-Pesa webhook rejected: overpayment', { event: 'mpesa_webhook_overpay', organizationId, invoiceId, amount, due: result.amountDue, paid: result.amountPaid })
       return NextResponse.json({ ok: false, error: 'overpayment' }, { status: 400 })
     }
-
-    await prisma.$transaction(async (tx) => {
-      await tx.rentPayment.create({
-        data: {
-          organizationId,
-          invoiceId: invoice.id,
-          tenantUserId: invoice.tenantUserId,
-          amount,
-          paymentMethod: 'mpesa_c2b',
-          gatewayReference: reference || null,
-          paidAt: safePaidAt,
-        },
-      })
-      const status = newPaid >= invoice.amountDue - 0.001 ? 'paid' : newPaid > 0 ? 'partial' : invoice.dueDate < new Date() ? 'overdue' : 'unpaid'
-      await tx.invoice.update({ where: { id: invoice.id }, data: { amountPaid: newPaid, status } })
-    })
+    if ('notFound' in result) {
+      return NextResponse.json({ ok: true, ignored: true, reason: 'invoice_not_found' })
+    }
+    if ('duplicate' in result) {
+      return NextResponse.json({ ok: true, idempotent: true })
+    }
 
     await notifyTelegram('M-Pesa payment recorded via webhook', { event: 'mpesa_payment_recorded', organizationId, invoiceId, amount, reference })
     return NextResponse.json({ ok: true })
-  } catch (e: any) {
-    await notifyTelegram('M-Pesa webhook error', { event: 'mpesa_webhook_error', error: e?.message || String(e) })
-    return NextResponse.json({ ok: false, error: e?.message || 'error' }, { status: 500 })
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e)
+    await notifyTelegram('M-Pesa webhook error', { event: 'mpesa_webhook_error', error: message })
+    return NextResponse.json({ ok: false, error: message }, { status: 500 })
   }
 }

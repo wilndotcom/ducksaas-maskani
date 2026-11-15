@@ -2,30 +2,9 @@
 
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { assertOrganizationWritable } from '@/lib/subscription-enforcement'
-import { requireMaskaniPermission } from '@/lib/maskani'
+import { requireMaskaniPermission, resolveActionOrgId } from '@/lib/maskani'
 
-async function resolveOrgId(orgParam?: string | null) {
-  const session = await getServerSession(authOptions)
-  if (!session) throw new Error('Unauthorized')
-  if (session.user.globalRole === 'super_admin') {
-    if (!orgParam) throw new Error('Organization is required')
-    const org = await prisma.organization.findUnique({ where: { id: orgParam }, select: { id: true } })
-    if (!org) throw new Error('Organization not found')
-    await assertOrganizationWritable(org.id)
-    return org.id
-  }
-  const membership = await prisma.organizationMember.findFirst({
-    where: { userId: session.user.id },
-    select: { organizationId: true },
-    orderBy: { createdAt: 'asc' },
-  })
-  if (!membership) throw new Error('No organization membership found')
-  await assertOrganizationWritable(membership.organizationId)
-  return membership.organizationId
-}
+const resolveOrgId = (orgParam?: string | null) => resolveActionOrgId(orgParam, 'maskani.maintenance')
 
 export async function createMaintenanceTicket(formData: FormData) {
   const orgId = await resolveOrgId(String(formData.get('orgId') || ''))

@@ -67,10 +67,13 @@ export function TenantsManager({ organization, orgQuery, roleLabel, leases, unit
             {open && (
               <div className="mb-8 rounded-2xl border border-slate-200/80 bg-white/80 p-6 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
                 <div className="mb-4 flex items-center justify-between"><h3 className="text-lg font-semibold">Add Lease</h3><button onClick={() => setOpen(false)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"><X className="h-4 w-4" /></button></div>
-                <p className="mb-4 text-sm text-slate-600 dark:text-slate-400">Required: unit, tenant email (existing user account), start/end dates, billing day (1-28). Active leases mark the unit as occupied and add the tenant as a member of this organization.</p>
+                <p className="mb-4 text-sm text-slate-600 dark:text-slate-400">Required: unit, tenant email, start/end dates, billing day (1-28). If the tenant has no account yet, fill in their name and a password to create one — they can then sign in to the tenant portal.</p>
                 <form action={(fd) => { fd.set('orgId', organization.id); run(() => createLease(fd), 'Lease created', () => setOpen(false)) }} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   <div className="sm:col-span-2 lg:col-span-3"><label className="mb-1 block text-sm font-medium">Unit *</label><select name="unitId" required className={inputCls}><option value="">Select unit</option>{units.map((u) => <option key={u.id} value={u.id}>{u.label}</option>)}</select></div>
-                  <div><label className="mb-1 block text-sm font-medium">Tenant email (registered user) *</label><input name="tenantEmail" type="email" required className={inputCls} placeholder="tenant@example.com" /></div>
+                  <div><label className="mb-1 block text-sm font-medium">Tenant email *</label><input name="tenantEmail" type="email" required className={inputCls} placeholder="tenant@example.com" /></div>
+                  <div><label className="mb-1 block text-sm font-medium">Tenant name <span className="text-slate-400">(required if new account)</span></label><input name="tenantName" className={inputCls} placeholder="Jane Doe" /></div>
+                  <div><label className="mb-1 block text-sm font-medium">Tenant phone</label><input name="tenantPhone" className={inputCls} placeholder="+254..." /></div>
+                  <div><label className="mb-1 block text-sm font-medium">Password <span className="text-slate-400">(required if new account, min 8 chars)</span></label><input name="tenantPassword" type="password" className={inputCls} placeholder="Leave blank if account exists" /></div>
                   <div><label className="mb-1 block text-sm font-medium">Start date *</label><input name="startDate" type="date" required className={inputCls} /></div>
                   <div><label className="mb-1 block text-sm font-medium">End date *</label><input name="endDate" type="date" required className={inputCls} /></div>
                   <div><label className="mb-1 block text-sm font-medium">Billing day of month (1-28) *</label><input name="billingDayOfMonth" type="number" min={1} max={28} defaultValue={1} required className={inputCls} /></div>
@@ -85,7 +88,7 @@ export function TenantsManager({ organization, orgQuery, roleLabel, leases, unit
               <div className="xl:col-span-2 rounded-2xl border border-slate-200/80 bg-white/70 p-6 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
                 <h3 className="mb-4 text-lg font-semibold">Leases</h3>
                 {leases.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/70 p-8 text-center text-sm text-slate-600 dark:border-white/15 dark:bg-slate-900/30 dark:text-slate-300">No leases yet. Add properties and units first, then create a lease for a tenant (tenant must have a registered user account).</div>
+                  <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/70 p-8 text-center text-sm text-slate-600 dark:border-white/15 dark:bg-slate-900/30 dark:text-slate-300">No leases yet. Add properties and units first, then create a lease — you can create the tenant&apos;s portal account at the same time.</div>
                 ) : (
                   <div className="space-y-3">
                     {leases.map((l) => (
@@ -110,7 +113,7 @@ export function TenantsManager({ organization, orgQuery, roleLabel, leases, unit
                 {tenants.length === 0 ? <p className="text-sm text-slate-500 dark:text-slate-400">No tenant members yet. Tenants are added to this organization when you create a lease for their account.</p> : (
                   <div className="space-y-3">{tenants.map((t) => (<div key={t.id} className="rounded-xl border border-slate-200/70 bg-white/60 p-3 dark:border-white/10 dark:bg-slate-900/40"><p className="font-medium">{t.name}</p><p className="text-xs text-slate-500 dark:text-slate-400">{t.email}</p>{t.phone && <p className="text-xs text-slate-500 dark:text-slate-400">{t.phone}</p>}</div>))}</div>
                 )}
-                <div className="mt-4 rounded-xl border border-cyan-200/60 bg-cyan-500/10 p-3 text-xs text-cyan-800 dark:border-cyan-500/20 dark:text-cyan-200">To add a new tenant, ensure they have a user account (register/sign up), then create a lease using their email.</div>
+                <div className="mt-4 rounded-xl border border-cyan-200/60 bg-cyan-500/10 p-3 text-xs text-cyan-800 dark:border-cyan-500/20 dark:text-cyan-200">To add a tenant, enter their email. If they don&apos;t have an account yet, also provide their name and a password — a tenant portal account will be created automatically.</div>
               </div>
             </div>
           </div>

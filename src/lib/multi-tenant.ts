@@ -61,7 +61,7 @@ export class MultiTenantScope {
     }
   }
 
-  static hasFeature(featureFlags: Record<string, any>, feature: string): boolean {
+  static hasFeature(featureFlags: Record<string, unknown>, feature: string): boolean {
     return featureFlags[feature] === true
   }
 
@@ -77,7 +77,7 @@ export class MultiTenantScope {
       return false
     }
 
-    const featureFlags = organization.subscriptionPlan.featureFlags as Record<string, any>
+    const featureFlags = organization.subscriptionPlan.featureFlags as Record<string, unknown>
     return this.hasFeature(featureFlags, feature)
   }
 

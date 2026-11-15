@@ -14,7 +14,7 @@ export async function createComplaint(formData: FormData) {
   const orgParam = String(formData.get('orgId') || '') || undefined
   const { org } = await resolveMaskaniOrg(orgParam)
   await assertOrganizationWritable(org.id, 'maskani.complaints.create')
-  await requireMaskaniPermission('manage_maintenance', org.id) // reuse maintenance permission for ops; tenants may submit via separate flow later
+  await requireMaskaniPermission('manage_complaints', org.id)
 
   const subject = String(formData.get('subject') || '').trim()
   const description = String(formData.get('description') || '').trim()
@@ -43,7 +43,7 @@ export async function updateComplaintStatus(formData: FormData) {
   const orgParam = String(formData.get('orgId') || '') || undefined
   const { org } = await resolveMaskaniOrg(orgParam)
   await assertOrganizationWritable(org.id, 'maskani.complaints.update')
-  await requireMaskaniPermission('manage_maintenance', org.id)
+  await requireMaskaniPermission('manage_complaints', org.id)
   const id = String(formData.get('id') || '')
   const status = String(formData.get('status') || 'open') as 'open' | 'in_progress' | 'resolved' | 'closed'
   const resolutionNote = String(formData.get('resolutionNote') || '').trim() || null

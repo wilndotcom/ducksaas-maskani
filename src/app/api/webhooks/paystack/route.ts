@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { prisma } from '@/lib/prisma'
 import { notifyTelegram } from '@/lib/telegram'
-
-export const runtime = 'nodejs'
+import { applySuccessfulPayment, findPaymentSessionByGateway, markPaymentSession } from '@/lib/payments'
+import { activateSubscriptionFromSession } from '@/lib/platform-billing'
 
 export async function POST(req: Request) {
   try {
@@ -19,57 +19,61 @@ export async function POST(req: Request) {
 
     const body = JSON.parse(raw || '{}')
     const event = String(body.event || '')
+    const data = body.data || {}
+    const reference = String(data.reference || '').trim()
+
+    if (event === 'charge.failed') {
+      await markPaymentSession({ reference, status: 'failed', failureReason: String(data.gateway_response || 'charge failed') })
+      return NextResponse.json({ ok: true, result: 'failed' })
+    }
     if (event !== 'charge.success') {
       return NextResponse.json({ ok: true, ignored: true, reason: 'event' })
     }
 
-    const data = body.data || {}
     const meta = data.metadata || {}
-    const organizationId = String(meta.organizationId || meta.orgId || '')
-    const invoiceId = String(meta.invoiceId || '')
     const amount = Number(data.amount || 0) / 100
-    const reference = String(data.reference || '').trim()
     const paidAtStr = data.paid_at || data.created_at || null
+
+    // Prefer the PaymentSession created at initiation time (reference is unique per transaction)
+    const session = reference ? await findPaymentSessionByGateway({ reference }) : null
+
+    // Subscription (SaaS plan) payments activate/extend the org subscription
+    if (session?.kind === 'subscription') {
+      if (session.status !== 'pending') return NextResponse.json({ ok: true, idempotent: true })
+      const result = await activateSubscriptionFromSession(session, reference || session.id)
+      return NextResponse.json({ ok: true, subscription: result })
+    }
+
+    const organizationId = session?.organizationId || String(meta.organizationId || meta.orgId || '')
+    const invoiceId = session?.invoiceId || String(meta.invoiceId || '')
 
     if (!organizationId || !invoiceId || !Number.isFinite(amount) || amount <= 0) {
       await notifyTelegram('Paystack webhook ignored: invalid payload', { event: 'paystack_webhook_invalid', organizationId, invoiceId, amount, reference })
       return NextResponse.json({ ok: true, ignored: true, reason: 'invalid_payload' })
     }
 
-    const invoice = await prisma.invoice.findFirst({ where: { id: invoiceId, organizationId } })
-    if (!invoice) {
-      await notifyTelegram('Paystack webhook ignored: invoice not found', { event: 'paystack_webhook_not_found', organizationId, invoiceId, reference })
-      return NextResponse.json({ ok: true, ignored: true, reason: 'invoice_not_found' })
-    }
-
-    if (reference) {
-      const existing = await prisma.rentPayment.findFirst({ where: { organizationId, gatewayReference: reference } })
-      if (existing) return NextResponse.json({ ok: true, idempotent: true })
-    }
-
     const paidAt = paidAtStr ? new Date(paidAtStr) : new Date()
-    const safePaidAt = isNaN(paidAt.getTime()) ? new Date() : paidAt
-    const newPaid = invoice.amountPaid + amount
-    if (newPaid > invoice.amountDue + 0.01) {
+    const result = await applySuccessfulPayment({
+      organizationId,
+      invoiceId,
+      amount,
+      paymentMethod: 'card',
+      gatewayReference: reference || null,
+      paidAt: isNaN(paidAt.getTime()) ? new Date() : paidAt,
+      sessionId: session?.id || null,
+    })
+
+    if ('overpaid' in result) {
       await notifyTelegram('Paystack webhook rejected: overpayment', { event: 'paystack_webhook_overpay', organizationId, invoiceId, amount })
       return NextResponse.json({ ok: false, error: 'overpayment' }, { status: 400 })
     }
-
-    await prisma.$transaction(async (tx) => {
-      await tx.rentPayment.create({
-        data: {
-          organizationId,
-          invoiceId: invoice.id,
-          tenantUserId: invoice.tenantUserId,
-          amount,
-          paymentMethod: 'card',
-          gatewayReference: reference || null,
-          paidAt: safePaidAt,
-        },
-      })
-      const status = newPaid >= invoice.amountDue - 0.001 ? 'paid' : newPaid > 0 ? 'partial' : invoice.dueDate < new Date() ? 'overdue' : 'unpaid'
-      await tx.invoice.update({ where: { id: invoice.id }, data: { amountPaid: newPaid, status } })
-    })
+    if ('notFound' in result) {
+      await notifyTelegram('Paystack webhook ignored: invoice not found', { event: 'paystack_webhook_not_found', organizationId, invoiceId, reference })
+      return NextResponse.json({ ok: true, ignored: true, reason: 'invoice_not_found' })
+    }
+    if ('duplicate' in result) {
+      return NextResponse.json({ ok: true, idempotent: true })
+    }
 
     // If this payment is for subscription renewal context, reactivate org (metadata.type === 'subscription')
     if (String(meta.type || '') === 'subscription') {
@@ -85,8 +89,9 @@ export async function POST(req: Request) {
 
     await notifyTelegram('Paystack payment recorded via webhook', { event: 'paystack_payment_recorded', organizationId, invoiceId, amount, reference })
     return NextResponse.json({ ok: true })
-  } catch (e: any) {
-    await notifyTelegram('Paystack webhook error', { event: 'paystack_webhook_error', error: e?.message || String(e) })
-    return NextResponse.json({ ok: false, error: e?.message || 'error' }, { status: 500 })
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e)
+    await notifyTelegram('Paystack webhook error', { event: 'paystack_webhook_error', error: message })
+    return NextResponse.json({ ok: false, error: message }, { status: 500 })
   }
 }

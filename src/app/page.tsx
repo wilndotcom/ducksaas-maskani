@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
 import { Building2, Home as HomeIcon, Sparkles, Shield, BarChart3, Users, ArrowRight, Zap } from 'lucide-react'
 import Link from 'next/link'
 
@@ -12,9 +13,13 @@ export default async function Home() {
   if (session) {
     if (session.user.globalRole === 'super_admin') {
       redirect('/ducksaas')
-    } else {
-      redirect('/maskani')
     }
+    const membership = await prisma.organizationMember.findFirst({
+      where: { userId: session.user.id },
+      select: { role: true },
+      orderBy: { createdAt: 'asc' },
+    })
+    redirect(membership?.role === 'tenant' ? '/portal' : '/maskani')
   }
 
   return (

@@ -32,11 +32,11 @@ export default async function OrganizationsPage() {
     ownerEmail: o.owner?.email ?? '',
     subscriptionPlanId: o.subscriptionPlanId,
     planName: o.subscriptionPlan?.name ?? null,
-    planPricingModel: (o.subscriptionPlan as any)?.pricingModel ?? null,
+    planPricingModel: o.subscriptionPlan?.pricingModel ?? null,
     subscriptionEndsAt: o.subscriptionEndsAt ? o.subscriptionEndsAt.toISOString().slice(0, 10) : '',
     createdAt: o.createdAt.toISOString().slice(0, 10),
     counts: o._count,
   }))
 
-  return <OrganizationsManager organizations={data as any} plans={plans as any} users={users} rootDomain={rootDomain} />
+  return <OrganizationsManager organizations={data} plans={plans} users={users} rootDomain={rootDomain} />
 }

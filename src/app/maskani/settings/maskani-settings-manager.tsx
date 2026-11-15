@@ -5,7 +5,7 @@ import Link from 'next/link'
 import {
   Sparkles, ArrowLeft, Settings, Building2, Users, CreditCard, Wallet, Bell,
   Palette, Wrench, ChevronRight, Save, CheckCircle2, Moon, Sun, Monitor,
-  Loader2, CalendarClock, AlertTriangle, BadgeDollarSign, Gauge, Workflow, UserCog,
+  CalendarClock, AlertTriangle, BadgeDollarSign, Gauge, Workflow, UserCog,
   ReceiptText, MessageSquareWarning, ExternalLink, Zap, Shield, UserPlus, Trash2
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -74,9 +74,12 @@ const DEFAULT_SETTINGS = {
   team: { allowCaretakerCreateInvoices: false, allowCaretakerRecordPayments: true, allowCaretakerManageTickets: true, requireApprovalForExpenses: false, activityLogging: true },
 }
 
-function mergeSettings(db: Record<string, any> | null | undefined, orgName: string) {
-  const d = db && typeof db === 'object' && !Array.isArray(db) ? db : {}
-  const get = (k: keyof typeof DEFAULT_SETTINGS) => (d[k] && typeof d[k] === 'object' && !Array.isArray(d[k]) ? d[k] : {})
+type MergedSettings = { [K in keyof typeof DEFAULT_SETTINGS]: typeof DEFAULT_SETTINGS[K] }
+
+function mergeSettings(db: Record<string, unknown> | null | undefined, orgName: string): MergedSettings {
+  const d: Record<string, unknown> = db && typeof db === 'object' && !Array.isArray(db) ? db : {}
+  const get = (k: keyof typeof DEFAULT_SETTINGS): Record<string, unknown> =>
+    d[k] && typeof d[k] === 'object' && !Array.isArray(d[k]) ? (d[k] as Record<string, unknown>) : {}
   return {
     general: { ...DEFAULT_SETTINGS.general, displayName: orgName, ...get('general') },
     branding: { ...DEFAULT_SETTINGS.branding, ...get('branding') },
@@ -88,10 +91,10 @@ function mergeSettings(db: Record<string, any> | null | undefined, orgName: stri
     maintenance: { ...DEFAULT_SETTINGS.maintenance, ...get('maintenance') },
     complaints: { ...DEFAULT_SETTINGS.complaints, ...get('complaints') },
     team: { ...DEFAULT_SETTINGS.team, ...get('team') },
-  }
+  } as MergedSettings
 }
 
-export function MaskaniSettingsManager({ organization, orgQuery, roleLabel, stats, gateways, adminMembers, users, initialSettings }: { organization: Org; orgQuery: string; roleLabel: string; stats: Stats; gateways: Gateway[]; adminMembers: AdminMember[]; users: UserOpt[]; initialSettings?: Record<string, any> | null }) {
+export function MaskaniSettingsManager({ organization, orgQuery, roleLabel, stats, gateways, adminMembers, users, initialSettings }: { organization: Org; orgQuery: string; roleLabel: string; stats: Stats; gateways: Gateway[]; adminMembers: AdminMember[]; users: UserOpt[]; initialSettings?: Record<string, unknown> | null }) {
   const init = useMemo(() => mergeSettings(initialSettings, organization.name), [initialSettings, organization.name])
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState<string | null>(null)
@@ -124,10 +127,16 @@ export function MaskaniSettingsManager({ organization, orgQuery, roleLabel, stat
   }
 
   useEffect(() => {
+    let id: number | undefined
     try {
       const t = localStorage.getItem('theme')
-      setTheme(t === 'dark' ? 'dark' : t === 'light' ? 'light' : 'system')
+      const resolved = t === 'dark' ? 'dark' : t === 'light' ? 'light' : 'system'
+      id = window.setTimeout(() => setTheme(resolved), 0)
     } catch {}
+    return () => { if (id !== undefined) window.clearTimeout(id) }
+  }, [])
+
+  useEffect(() => {
     try { document.cookie = `ducksaas_currency=${encodeURIComponent(init.general.currency)}; path=/; max-age=31536000; samesite=lax` } catch {}
   }, [init.general.currency])
 

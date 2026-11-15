@@ -7,6 +7,8 @@ import { startOfDay, startOfMonth, startOfWeek, startOfYear, addDays, format } f
 import { headers } from 'next/headers'
 import { getTenantHost } from '@/lib/tenant-domain'
 import { syncOrganizationSubscription } from '@/lib/subscription-enforcement'
+import { pickActiveMembership } from '@/lib/maskani'
+import { OrgSwitcher } from './org-switcher'
 import { formatCurrency, getSavedCurrency } from '@/lib/currency'
 import Link from 'next/link'
 import {
@@ -40,6 +42,7 @@ export default async function MaskaniPage({ searchParams }: { searchParams: Prom
 
   let org
   let roleLabel = ''
+  let userOrgs: { id: string; name: string }[] = []
 
   if (session.user.globalRole === 'super_admin') {
     if (!orgParam) {
@@ -68,18 +71,26 @@ export default async function MaskaniPage({ searchParams }: { searchParams: Prom
     const stateLabel = sub.isSuspended ? 'suspended' : sub.isGracePeriod ? 'grace period' : sub.isExpired ? 'expired' : 'active'
     roleLabel = `super_admin (viewing, ${stateLabel})`
   } else {
-    const membership = await prisma.organizationMember.findFirst({
+    const memberships = await prisma.organizationMember.findMany({
       where: { userId: session.user.id },
-      include: {
-        organization: {
-          include: {
-            subscriptionPlan: { select: { name: true } },
-            _count: { select: { properties: true, units: true, members: true, leases: true, invoices: true, maintenanceTickets: true, rentPayments: true } },
-          },
-        },
-      },
+      select: { id: true, role: true, organizationId: true, organization: { select: { id: true, name: true } } },
       orderBy: { createdAt: 'asc' },
     })
+    userOrgs = memberships.map((m) => m.organization)
+    const activeMembership = await pickActiveMembership(session.user.id, memberships)
+    const membership = activeMembership
+      ? await prisma.organizationMember.findUnique({
+          where: { id: activeMembership.id },
+          include: {
+            organization: {
+              include: {
+                subscriptionPlan: { select: { name: true } },
+                _count: { select: { properties: true, units: true, members: true, leases: true, invoices: true, maintenanceTickets: true, rentPayments: true } },
+              },
+            },
+          },
+        })
+      : null
 
     if (!membership) {
       return (
@@ -102,6 +113,10 @@ export default async function MaskaniPage({ searchParams }: { searchParams: Prom
           </div>
         </div>
       )
+    }
+
+    if (membership.role === 'tenant') {
+      redirect('/portal')
     }
 
     org = membership.organization
@@ -241,6 +256,7 @@ export default async function MaskaniPage({ searchParams }: { searchParams: Prom
                 <div className="mb-2 flex flex-wrap items-center gap-2">
                   <h2 className="text-3xl font-bold tracking-tight lg:text-4xl">{org.name}</h2>
                   <a href="/maskani" target="_blank" rel="noopener noreferrer" className="rounded-full border border-slate-200 bg-white/70 px-2.5 py-1 text-xs font-medium text-slate-600 transition hover:border-emerald-400 hover:text-emerald-700 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:text-emerald-300" title="Open organization workspace">{tenantHost}</a>
+                  <OrgSwitcher orgs={userOrgs} currentOrgId={org.id} />
                   <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${org.status === 'active' ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : org.status === 'grace_period' ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300' : 'bg-rose-500/15 text-rose-700 dark:text-rose-300'}`}>
                     {org.status.replace('_', ' ')}
                   </span>

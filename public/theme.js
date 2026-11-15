@@ -4,5 +4,5 @@
     var d = t ? t === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
     if (d) document.documentElement.classList.add('dark');
     else document.documentElement.classList.remove('dark');
-  } catch (e) {}
+  } catch {}
 })();

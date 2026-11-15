@@ -25,6 +25,7 @@ export default withAuth(
 export const config = {
   matcher: [
     '/ducksaas/:path*',
-    '/maskani/:path*'
+    '/maskani/:path*',
+    '/portal/:path*'
   ]
 }

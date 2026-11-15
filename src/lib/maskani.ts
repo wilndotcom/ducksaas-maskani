@@ -2,9 +2,22 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import { syncOrganizationSubscription } from '@/lib/subscription-enforcement'
+import { cookies } from 'next/headers'
+import { syncOrganizationSubscription, assertOrganizationWritable } from '@/lib/subscription-enforcement'
 
 export type MaskaniOrg = { id: string; name: string; slug: string; status: string }
+
+/**
+ * Picks the user's active organization membership, honoring the
+ * `maskani_org` cookie (set by the org switcher) when present.
+ */
+export async function pickActiveMembership<T extends { organizationId: string }>(userId: string, memberships: T[]): Promise<T | null> {
+  if (memberships.length === 0) return null
+  if (memberships.length === 1) return memberships[0]
+  const cookieStore = await cookies()
+  const preferred = cookieStore.get('maskani_org')?.value
+  return memberships.find((m) => m.organizationId === preferred) || memberships[0]
+}
 
 export async function resolveMaskaniOrg(orgParam?: string | null) {
   const session = await getServerSession(authOptions)
@@ -25,12 +38,14 @@ export async function resolveMaskaniOrg(orgParam?: string | null) {
     return { session, org: fresh || org, roleLabel: `super_admin (viewing, ${statusLabel})`, orgQuery: `?org=${org.id}`, subscription: sub }
   }
 
-  const membership = await prisma.organizationMember.findFirst({
+  const memberships = await prisma.organizationMember.findMany({
     where: { userId: session.user.id },
     include: { organization: { select: { id: true, name: true, slug: true, status: true } } },
     orderBy: { createdAt: 'asc' },
   })
+  const membership = await pickActiveMembership(session.user.id, memberships)
   if (!membership) redirect('/auth/register')
+  if (membership.role === 'tenant') redirect('/portal')
 
   const sub = await syncOrganizationSubscription(membership.organization.id)
   // Grace period: allow read-only access; suspended: block portal.
@@ -42,6 +57,32 @@ export async function resolveMaskaniOrg(orgParam?: string | null) {
     select: { id: true, name: true, slug: true, status: true },
   })
   return { session, org: org || membership.organization, roleLabel: membership.role.replace('_', ' '), orgQuery: '', subscription: sub }
+}
+
+/**
+ * Shared org resolution for Maskani server actions.
+ * Super admins must pass ?org=<id>; members resolve to their first membership.
+ * Enforces subscription writability for the resolved org.
+ */
+export async function resolveActionOrgId(orgParam?: string | null, context?: string) {
+  const session = await getServerSession(authOptions)
+  if (!session) throw new Error('Unauthorized')
+  if (session.user.globalRole === 'super_admin') {
+    if (!orgParam) throw new Error('Organization is required')
+    const org = await prisma.organization.findUnique({ where: { id: orgParam }, select: { id: true } })
+    if (!org) throw new Error('Organization not found')
+    await assertOrganizationWritable(org.id, context)
+    return org.id
+  }
+  const memberships = await prisma.organizationMember.findMany({
+    where: { userId: session.user.id },
+    select: { organizationId: true },
+    orderBy: { createdAt: 'asc' },
+  })
+  const membership = await pickActiveMembership(session.user.id, memberships)
+  if (!membership) throw new Error('No organization membership found')
+  await assertOrganizationWritable(membership.organizationId, context)
+  return membership.organizationId
 }
 
 /**

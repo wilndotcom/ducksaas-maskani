@@ -4,6 +4,7 @@ import { cookies } from 'next/headers'
 import { formatCurrency, getSavedCurrency } from '@/lib/currency'
 import Link from 'next/link'
 import { Sparkles, ArrowLeft, Settings, CreditCard, Building2, Users, Shield } from 'lucide-react'
+import { PlanPicker } from './plan-picker'
 
 export const instant = false
 
@@ -13,7 +14,7 @@ export default async function MaskaniPaymentPlanPage({ searchParams }: { searchP
   const cookieStore = await cookies()
   const currency = getSavedCurrency(cookieStore.get('ducksaas_currency')?.value)
 
-  const [organization, stats, gateways] = await Promise.all([
+  const [organization, stats, gateways, plans] = await Promise.all([
     prisma.organization.findUnique({
       where: { id: org.id },
       include: { owner: { select: { name: true, email: true } }, subscriptionPlan: true },
@@ -23,6 +24,7 @@ export default async function MaskaniPaymentPlanPage({ searchParams }: { searchP
       include: { _count: { select: { properties: true, units: true, members: true, leases: true } } },
     }),
     prisma.landlordPaymentGateway.findMany({ where: { organizationId: org.id }, orderBy: { createdAt: 'desc' } }),
+    prisma.subscriptionPlan.findMany({ where: { isActive: true }, orderBy: { priceMonthly: 'asc' } }),
   ])
   if (!organization || !stats) throw new Error('Organization not found')
 
@@ -103,7 +105,8 @@ export default async function MaskaniPaymentPlanPage({ searchParams }: { searchP
                     <p className="mt-1 text-amber-700/90 dark:text-amber-200/80">This organization can operate with default limits. A super admin can assign a plan from DuckSaaS Organizations.</p>
                   </div>
                 )}
-                <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">Plan assignment and billing cycles are managed by the DuckSaaS super admin.</p>
+                <PlanPicker orgId={org.id} plans={plans} currentPlanId={organization.subscriptionPlanId} propertyCount={stats._count.properties} />
+                <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">Payments are processed securely. You can also ask the DuckSaaS super admin to assign a plan manually.</p>
               </section>
 
               <section className="rounded-2xl border border-slate-200/80 bg-white/70 p-6 shadow-sm backdrop-blur-xl lg:col-span-2 dark:border-white/10 dark:bg-white/5">

@@ -23,6 +23,13 @@ RUN npx prisma generate
 ENV NEXT_TELEMETRY_DISABLED 1
 RUN npm run build
 
+# Migration runner (one-shot, used by docker-compose `migrate` service)
+FROM base AS migrator
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY prisma ./prisma
+CMD ["npx", "prisma", "migrate", "deploy"]
+
 # Production image
 FROM base AS runner
 WORKDIR /app

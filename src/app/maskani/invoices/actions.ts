@@ -2,30 +2,10 @@
 
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { assertOrganizationWritable } from '@/lib/subscription-enforcement'
-import { requireMaskaniPermission } from '@/lib/maskani'
+import { requireMaskaniPermission, resolveActionOrgId } from '@/lib/maskani'
+import { sendInvoiceEmail } from '@/lib/email'
 
-async function resolveOrgId(orgParam?: string | null) {
-  const session = await getServerSession(authOptions)
-  if (!session) throw new Error('Unauthorized')
-  if (session.user.globalRole === 'super_admin') {
-    if (!orgParam) throw new Error('Organization is required')
-    const org = await prisma.organization.findUnique({ where: { id: orgParam }, select: { id: true } })
-    if (!org) throw new Error('Organization not found')
-    await assertOrganizationWritable(org.id, 'maskani.invoices')
-    return org.id
-  }
-  const membership = await prisma.organizationMember.findFirst({
-    where: { userId: session.user.id },
-    select: { organizationId: true },
-    orderBy: { createdAt: 'asc' },
-  })
-  if (!membership) throw new Error('No organization membership found')
-  await assertOrganizationWritable(membership.organizationId, 'maskani.invoices')
-  return membership.organizationId
-}
+const resolveOrgId = (orgParam?: string | null) => resolveActionOrgId(orgParam, 'maskani.invoices')
 
 function invoiceStatus(amountDue: number, amountPaid: number, dueDate: Date): 'unpaid' | 'partial' | 'paid' | 'overdue' {
   if (amountPaid >= amountDue - 0.001) return 'paid'
@@ -35,7 +15,7 @@ function invoiceStatus(amountDue: number, amountPaid: number, dueDate: Date): 'u
 
 async function getOrgInvoiceSettings(orgId: string) {
   const org = await prisma.organization.findUnique({ where: { id: orgId }, select: { settings: true } })
-  const s = (org?.settings as Record<string, any>) || {}
+  const s = (org?.settings as Record<string, unknown>) || {}
   return {
     invoicePrefix: String(s.invoice_prefix || 'INV').replace(/[^A-Za-z0-9-]/g, '').slice(0, 10) || 'INV',
     paymentGraceDays: Number.isFinite(Number(s.payment_grace_days)) ? Math.max(0, Math.min(60, Number(s.payment_grace_days))) : 0,
@@ -66,7 +46,7 @@ export async function createInvoice(formData: FormData) {
   const effectiveDue = new Date(dueDate)
   if (paymentGraceDays > 0) effectiveDue.setDate(effectiveDue.getDate() + paymentGraceDays)
   const invoiceNumber = `${invoicePrefix}-${Date.now().toString(36).toUpperCase()}`
-  await prisma.invoice.create({
+  const created = await prisma.invoice.create({
     data: {
       organizationId: orgId,
       leaseId: lease.id,
@@ -80,6 +60,24 @@ export async function createInvoice(formData: FormData) {
       status: invoiceStatus(amountDue, 0, effectiveDue),
     },
   })
+
+  const [tenant, org] = await Promise.all([
+    prisma.user.findUnique({ where: { id: lease.tenantUserId }, select: { name: true, email: true } }),
+    prisma.organization.findUnique({ where: { id: orgId }, select: { name: true, settings: true } }),
+  ])
+  if (tenant?.email) {
+    const orgSettings = (org?.settings as Record<string, unknown>) || {}
+    sendInvoiceEmail({
+      to: tenant.email,
+      name: tenant.name,
+      orgName: org?.name || 'your property manager',
+      invoiceNumber: created.invoiceNumber,
+      amount: amountDue,
+      currency: String(orgSettings.currency || 'KES'),
+      dueDate: effectiveDue.toLocaleDateString(),
+    }).catch(() => {})
+  }
+
   revalidatePath('/maskani')
   revalidatePath('/maskani/invoices')
 }

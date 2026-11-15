@@ -6,7 +6,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import bcrypt from 'bcryptjs'
 import { provisionOrgFromMaster } from '@/lib/organization-template'
-import { calculatePlanAmount, type BillingCycle } from '@/lib/saas-billing'
+import { calculatePlanAmount, type BillingCycle, type PlanPricing } from '@/lib/saas-billing'
 
 async function ensureAdmin() {
   const session = await getServerSession(authOptions)
@@ -126,13 +126,22 @@ export async function updateOrganization(formData: FormData) {
 
     const periodStart = new Date()
     let periodEnd: Date | null = ends ? new Date(ends) : null
-    let ledgerData: any = null
+    let ledgerData: {
+      organizationId: string
+      planId: string
+      amount: number
+      gateway: string
+      transactionRef: string
+      status: 'active'
+      periodStart: Date
+      periodEnd: Date
+    } | null = null
 
     if (subscriptionPlanId) {
       const plan = await tx.subscriptionPlan.findUnique({ where: { id: subscriptionPlanId } })
       if (!plan) throw new Error('Subscription plan not found')
       const propertyCount = await tx.property.count({ where: { organizationId: id } })
-      const breakdown = calculatePlanAmount(plan as any, propertyCount, billingCycle)
+      const breakdown = calculatePlanAmount(plan as PlanPricing, propertyCount, billingCycle)
       if (!periodEnd || isNaN(periodEnd.getTime())) {
         periodEnd = nextPeriodEnd(periodStart, billingCycle)
       }

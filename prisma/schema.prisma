@@ -153,6 +153,7 @@ model Organization {
   paymentGateways      LandlordPaymentGateway[]
   properties           Property[]
   saasSubscriptions    SaaSSubscriptionLedger[]
+  paymentSessions      PaymentSession[]
   units                Unit[]
   leases               Lease[]
   invoices             Invoice[]
@@ -207,6 +208,7 @@ model SubscriptionPlan {
   // Relations
   organizations     Organization[] @relation("OrganizationSubscription")
   saasSubscriptions SaaSSubscriptionLedger[]
+  paymentSessions   PaymentSession[]
 
   @@index([isActive])
   @@index([pricingModel])
@@ -346,6 +348,7 @@ model Invoice {
   unit              Unit          @relation(fields: [unitId], references: [id], onDelete: Cascade)
   tenant            User          @relation("TenantInvoices", fields: [tenantUserId], references: [id], onDelete: Cascade)
   payments          RentPayment[]
+  paymentSessions   PaymentSession[]
 
   @@unique([invoiceNumber])
   @@index([organizationId])
@@ -377,6 +380,40 @@ model RentPayment {
   @@index([tenantUserId])
   @@index([paidAt])
   @@map("rent_payments")
+}
+
+model PaymentSession {
+  id                String                  @id @default(cuid())
+  organizationId    String                  @map("organization_id")
+  invoiceId         String?                 @map("invoice_id")
+  tenantUserId      String?                 @map("tenant_user_id")
+  kind              String                  @default("rent") // rent | subscription
+  planId            String?                 @map("plan_id")
+  billingCycle      String?                 @map("billing_cycle") // monthly | yearly
+  provider          PaymentGatewayProvider
+  checkoutRequestId String?                 @map("checkout_request_id")
+  reference         String?
+  phone             String?
+  email             String?
+  amount            Float
+  currency          String                  @default("KES")
+  status            String                  @default("pending") // pending | success | failed
+  authorizationUrl  String?                 @map("authorization_url")
+  failureReason     String?                 @map("failure_reason")
+  createdAt         DateTime                @default(now()) @map("created_at")
+  updatedAt         DateTime                @updatedAt @map("updated_at")
+
+  organization      Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoice           Invoice?                @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  plan              SubscriptionPlan?       @relation(fields: [planId], references: [id])
+
+  @@index([organizationId])
+  @@index([invoiceId])
+  @@index([kind])
+  @@index([checkoutRequestId])
+  @@index([reference])
+  @@index([status])
+  @@map("payment_sessions")
 }
 
 model MaintenanceTicket {
