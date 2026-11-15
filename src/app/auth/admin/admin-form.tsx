@@ -116,8 +116,16 @@ export function AdminSignInForm() {
               </button>
             </form>
 
-            <div className="mt-6 border-t border-white/10 pt-6 text-center">
-              <p className="text-sm text-slate-300">
+            <div className="mt-6 border-t border-white/10 pt-6">
+              <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
+                <p className="mb-2 text-center text-sm font-medium text-slate-200">Demo credentials</p>
+                <div className="space-y-1.5 text-xs text-slate-400">
+                  <p><span className="text-cyan-300">Username:</span> admin</p>
+                  <p><span className="text-cyan-300">Email:</span> admin@ducksaas.com</p>
+                  <p><span className="text-cyan-300">Password:</span> admin123</p>
+                </div>
+              </div>
+              <p className="mt-3 text-center text-sm text-slate-300">
                 Landlord, caretaker, or tenant?{' '}
                 <Link href="/auth/signin" className="font-medium text-cyan-300 hover:text-cyan-200">Use the workspace sign in</Link>
               </p>
