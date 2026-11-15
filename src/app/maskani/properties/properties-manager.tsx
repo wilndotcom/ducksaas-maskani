@@ -7,13 +7,16 @@ import { formatCurrency } from '@/lib/currency'
 import { createProperty, updateProperty, deleteProperty, createUnit, updateUnit, deleteUnit } from './actions'
 import { MobileNav } from '@/components/mobile-nav'
 
+type Charge = { label: string; amount: number }
 type Unit = {
   id: string
   unitNumber: string
+  unitType: string | null
   floor: number | null
   monthlyRent: number
   depositAmount: number
   waterRatePerUnit: number
+  extraCharges: Charge[]
   status: 'vacant' | 'occupied' | 'maintenance'
   propertyId: string
 }
@@ -49,6 +52,12 @@ export function PropertiesManager({
   const [msg, setMsg] = useState<string | null>(null)
   const [propForm, setPropForm] = useState<{ open: boolean; editing: Property | null }>({ open: false, editing: null })
   const [unitForm, setUnitForm] = useState<{ open: boolean; editing: Unit | null; propertyId: string }>({ open: false, editing: null, propertyId: '' })
+  const [unitCharges, setUnitCharges] = useState<Charge[]>([])
+  const openUnitForm = (editing: Unit | null, propertyId: string) => {
+    setUnitCharges(editing?.extraCharges?.length ? editing.extraCharges.map((c) => ({ ...c })) : [])
+    setUnitForm({ open: true, editing, propertyId })
+  }
+  const closeUnitForm = () => { setUnitForm({ open: false, editing: null, propertyId: '' }); setUnitCharges([]) }
   const [expanded, setExpanded] = useState<string | null>(properties[0]?.id || null)
 
   const flash = (m: string) => { setMsg(m); setTimeout(() => setMsg(null), 2500) }
@@ -176,9 +185,9 @@ export function PropertiesManager({
               <div className="mb-8 rounded-2xl border border-slate-200/80 bg-white/80 p-6 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
                 <div className="mb-4 flex items-center justify-between">
                   <h3 className="text-lg font-semibold">{unitForm.editing ? 'Edit Unit' : 'Add Unit'}</h3>
-                  <button onClick={() => setUnitForm({ open: false, editing: null, propertyId: '' })} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"><X className="h-4 w-4" /></button>
+                  <button onClick={() => closeUnitForm()} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"><X className="h-4 w-4" /></button>
                 </div>
-                <form action={(fd) => { fd.set('orgId', organization.id); run(() => (unitForm.editing ? updateUnit(fd) : createUnit(fd)), unitForm.editing ? 'Unit updated' : 'Unit created', () => setUnitForm({ open: false, editing: null, propertyId: '' })) }} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <form action={(fd) => { fd.set('orgId', organization.id); run(() => (unitForm.editing ? updateUnit(fd) : createUnit(fd)), unitForm.editing ? 'Unit updated' : 'Unit created', () => closeUnitForm()) }} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {unitForm.editing && <input type="hidden" name="id" value={unitForm.editing.id} />}
                   <div>
                     <label className="mb-1 block text-sm font-medium">Property *</label>
@@ -190,6 +199,20 @@ export function PropertiesManager({
                   <div>
                     <label className="mb-1 block text-sm font-medium">Unit number / name *</label>
                     <input name="unitNumber" required defaultValue={unitForm.editing?.unitNumber} className={inputCls} placeholder="e.g. A-101" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">Unit type / size</label>
+                    <select name="unitType" defaultValue={unitForm.editing?.unitType || ''} className={inputCls}>
+                      <option value="">Select type</option>
+                      <option value="Bedsitter">Bedsitter</option>
+                      <option value="Studio">Studio</option>
+                      <option value="1 Bedroom">1 Bedroom</option>
+                      <option value="2 Bedroom">2 Bedroom</option>
+                      <option value="3 Bedroom">3 Bedroom</option>
+                      <option value="4+ Bedroom">4+ Bedroom</option>
+                      <option value="Shop/Commercial">Shop / Commercial</option>
+                      <option value="Other">Other</option>
+                    </select>
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium">Floor</label>
@@ -207,6 +230,23 @@ export function PropertiesManager({
                     <label className="mb-1 block text-sm font-medium">Water rate / unit</label>
                     <input name="waterRatePerUnit" type="number" min={0} step="0.01" defaultValue={unitForm.editing?.waterRatePerUnit ?? 0} className={inputCls} placeholder="e.g. 0.5" />
                   </div>
+                  <div className="sm:col-span-2 lg:col-span-3">
+                    <label className="mb-1 block text-sm font-medium">Extra monthly charges <span className="font-normal text-slate-500">(optional — e.g. internet, water retainer, parking)</span></label>
+                    <input type="hidden" name="extraCharges" value={JSON.stringify(unitCharges)} />
+                    <div className="space-y-2">
+                      {unitCharges.map((c, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <input value={c.label} onChange={(e) => setUnitCharges(unitCharges.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} className={inputCls} placeholder="Charge name e.g. Internet" />
+                          <input value={c.amount} onChange={(e) => setUnitCharges(unitCharges.map((x, j) => (j === i ? { ...x, amount: Number(e.target.value) || 0 } : x)))} type="number" min={0} step="0.01" className={`${inputCls} w-32`} placeholder="Amount" />
+                          <button type="button" onClick={() => setUnitCharges(unitCharges.filter((_, j) => j !== i))} className="rounded-lg border border-rose-200 p-2 text-rose-500 hover:bg-rose-50 dark:border-rose-500/30 dark:hover:bg-rose-500/10"><Trash2 className="h-4 w-4" /></button>
+                        </div>
+                      ))}
+                      {unitCharges.length < 10 && (
+                        <button type="button" onClick={() => setUnitCharges([...unitCharges, { label: '', amount: 0 }])} className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-emerald-400 hover:text-emerald-600 dark:border-white/15 dark:text-slate-300"><Plus className="h-3.5 w-3.5" /> Add charge</button>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">These are added to the tenant&apos;s monthly invoice automatically on the billing day.</p>
+                  </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium">Status *</label>
                     <select name="status" required defaultValue={unitForm.editing?.status || 'vacant'} className={inputCls}>
@@ -216,7 +256,7 @@ export function PropertiesManager({
                     </select>
                   </div>
                   <div className="sm:col-span-2 lg:col-span-3 flex justify-end gap-3">
-                    <button type="button" onClick={() => setUnitForm({ open: false, editing: null, propertyId: '' })} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50 dark:border-white/10 dark:hover:bg-white/5">Cancel</button>
+                    <button type="button" onClick={() => closeUnitForm()} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50 dark:border-white/10 dark:hover:bg-white/5">Cancel</button>
                     <button type="submit" disabled={pending} className="rounded-xl bg-slate-900 px-5 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60 dark:bg-white dark:text-slate-900">{pending ? 'Saving...' : unitForm.editing ? 'Update Unit' : 'Create Unit'}</button>
                   </div>
                 </form>
@@ -249,7 +289,7 @@ export function PropertiesManager({
                           </div>
                         </button>
                         <div className="flex flex-wrap items-center gap-2">
-                          <button onClick={() => setUnitForm({ open: true, editing: null, propertyId: p.id })} className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300/60 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300"><Plus className="h-4 w-4" /> Add Unit</button>
+                          <button onClick={() => openUnitForm(null, p.id)} className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300/60 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300"><Plus className="h-4 w-4" /> Add Unit</button>
                           <button onClick={() => setPropForm({ open: true, editing: p })} className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-100 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10" title="Edit property"><Pencil className="h-4 w-4" /></button>
                           <button onClick={() => { if (confirm(`Delete property "${p.name}" and all its units?`)) { const fd = new FormData(); fd.set('orgId', organization.id); fd.set('id', p.id); run(() => deleteProperty(fd), 'Property deleted') } }} className="rounded-lg border border-rose-200 p-2 text-rose-600 hover:bg-rose-50 dark:border-rose-500/30 dark:text-rose-300 dark:hover:bg-rose-500/10" title="Delete property"><Trash2 className="h-4 w-4" /></button>
                         </div>
@@ -258,7 +298,7 @@ export function PropertiesManager({
                         <div className="border-t border-slate-200/70 px-5 pb-5 pt-4 dark:border-white/10">
                           {p.units.length === 0 ? (
                             <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/70 p-6 text-center text-sm text-slate-600 dark:border-white/15 dark:bg-slate-900/30 dark:text-slate-300">
-                              No units added yet. <button onClick={() => setUnitForm({ open: true, editing: null, propertyId: p.id })} className="font-medium text-emerald-700 hover:underline dark:text-emerald-300">Add the first unit</button>.
+                              No units added yet. <button onClick={() => openUnitForm(null, p.id)} className="font-medium text-emerald-700 hover:underline dark:text-emerald-300">Add the first unit</button>.
                             </div>
                           ) : (
                             <div className="overflow-x-auto">
@@ -276,14 +316,14 @@ export function PropertiesManager({
                                 <tbody className="divide-y divide-slate-200/60 dark:divide-white/5">
                                   {p.units.map((u) => (
                                     <tr key={u.id} className="hover:bg-slate-50/60 dark:hover:bg-white/5">
-                                      <td className="px-3 py-3 font-medium"><span className="inline-flex items-center gap-2"><Home className="h-4 w-4 text-slate-400" /> {u.unitNumber}</span></td>
+                                      <td className="px-3 py-3 font-medium"><span className="inline-flex items-center gap-2"><Home className="h-4 w-4 text-slate-400" /> {u.unitNumber}</span>{u.unitType && <span className="rounded-full bg-slate-500/10 px-2 py-0.5 text-xs font-normal text-slate-600 dark:text-slate-300">{u.unitType}</span>}</td>
                                       <td className="px-3 py-3 text-slate-600 dark:text-slate-300">{u.floor ?? '—'}</td>
                                       <td className="px-3 py-3 text-slate-700 dark:text-slate-200">{formatCurrency(u.monthlyRent, currency)}</td>
                                       <td className="px-3 py-3 text-slate-700 dark:text-slate-200">{formatCurrency(u.depositAmount, currency)}</td>
                                       <td className="px-3 py-3"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium capitalize ${statusBadge(u.status)}`}>{u.status}</span></td>
                                       <td className="px-3 py-3">
                                         <div className="flex justify-end gap-2">
-                                          <button onClick={() => setUnitForm({ open: true, editing: u, propertyId: p.id })} className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-100 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10" title="Edit unit"><Pencil className="h-4 w-4" /></button>
+                                          <button onClick={() => openUnitForm(u, p.id)} className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-100 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10" title="Edit unit"><Pencil className="h-4 w-4" /></button>
                                           <button onClick={() => { if (confirm(`Delete unit "${u.unitNumber}"?`)) { const fd = new FormData(); fd.set('orgId', organization.id); fd.set('id', u.id); run(() => deleteUnit(fd), 'Unit deleted') } }} className="rounded-lg border border-rose-200 p-2 text-rose-600 hover:bg-rose-50 dark:border-rose-500/30 dark:text-rose-300 dark:hover:bg-rose-500/10" title="Delete unit"><Trash2 className="h-4 w-4" /></button>
                                         </div>
                                       </td>

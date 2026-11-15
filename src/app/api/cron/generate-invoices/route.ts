@@ -31,7 +31,7 @@ export async function GET(req: Request) {
   const leases = await prisma.lease.findMany({
     where: { status: 'active' },
     include: {
-      unit: { select: { id: true, unitNumber: true, monthlyRent: true, property: { select: { name: true } } } },
+      unit: { select: { id: true, unitNumber: true, monthlyRent: true, extraCharges: true, property: { select: { name: true } } } },
       organization: { select: { id: true, name: true, settings: true, status: true, subscriptionEndsAt: true } },
       tenant: { select: { id: true, name: true, email: true } },
     },
@@ -126,7 +126,14 @@ export async function GET(req: Request) {
       })
       const rentAmount = lease.unit.monthlyRent
       const waterAmount = waterReadings.reduce((sum, r) => sum + r.amount, 0)
-      const amountDue = rentAmount + waterAmount
+      // Recurring extra charges configured on the unit (internet, retainer, etc.)
+      const unitCharges = Array.isArray(lease.unit.extraCharges)
+        ? (lease.unit.extraCharges as { label?: unknown; amount?: unknown }[])
+            .map((c) => ({ label: String(c?.label || '').slice(0, 60), amount: Number(c?.amount) || 0 }))
+            .filter((c) => c.label && c.amount > 0)
+        : []
+      const otherChargesTotal = unitCharges.reduce((sum, c) => sum + c.amount, 0)
+      const amountDue = rentAmount + waterAmount + otherChargesTotal
       if (!Number.isFinite(amountDue) || amountDue <= 0) {
         skipped++
         continue
@@ -146,6 +153,7 @@ export async function GET(req: Request) {
           amountDue,
           amountPaid: 0,
           waterAmount,
+          otherCharges: unitCharges.length > 0 ? unitCharges : undefined,
           dueDate,
           status,
         },

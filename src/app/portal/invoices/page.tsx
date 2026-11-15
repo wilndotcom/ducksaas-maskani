@@ -78,6 +78,11 @@ export default async function PortalInvoices() {
                     <p className="text-2xl font-bold">{formatCurrency(balance, currency)}</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400">of {formatCurrency(inv.amountDue, currency)} · paid {formatCurrency(inv.amountPaid, currency)}</p>
                     {inv.waterAmount > 0 && <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">includes {formatCurrency(inv.waterAmount, currency)} water</p>}
+                    {Array.isArray(inv.otherCharges) && inv.otherCharges.length > 0 && (
+                      <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                        includes {formatCurrency((inv.otherCharges as { amount: number }[]).reduce((s, c) => s + c.amount, 0), currency)} charges ({(inv.otherCharges as { label: string }[]).map((c) => c.label).join(', ')})
+                      </p>
+                    )}
                   </div>
                 </div>
 

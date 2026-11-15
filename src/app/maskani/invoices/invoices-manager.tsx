@@ -8,7 +8,7 @@ import { createInvoice, recordPayment } from './actions'
 import { MobileNav } from '@/components/mobile-nav'
 
 type Payment = { id: string; amount: number; method: string; reference: string | null; paidAt: string }
-type Invoice = { id: string; invoiceNumber: string; billingMonth: string; amountDue: number; amountPaid: number; waterAmount: number; dueDate: string; status: 'unpaid' | 'partial' | 'paid' | 'overdue'; tenantName: string; tenantEmail: string; unitLabel: string; payments: Payment[] }
+type Invoice = { id: string; invoiceNumber: string; billingMonth: string; amountDue: number; amountPaid: number; waterAmount: number; otherCharges: { label: string; amount: number }[]; dueDate: string; status: 'unpaid' | 'partial' | 'paid' | 'overdue'; tenantName: string; tenantEmail: string; unitLabel: string; payments: Payment[] }
 type LeaseOpt = { id: string; label: string; monthlyRent: number }
 
 export function InvoicesManager({ organization, orgQuery, roleLabel, invoices, leases, currency }: { organization: { id: string; name: string }; orgQuery: string; roleLabel: string; invoices: Invoice[]; leases: LeaseOpt[]; currency: string }) {
@@ -125,7 +125,7 @@ export function InvoicesManager({ organization, orgQuery, roleLabel, invoices, l
                             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Due {inv.dueDate} · {inv.tenantEmail}</p>
                           </div>
                           <div className="text-right">
-                            <p className="text-sm text-slate-500 dark:text-slate-400">Due {fmt(inv.amountDue)}{inv.waterAmount > 0 ? ` (rent ${fmt(inv.amountDue - inv.waterAmount)} + water ${fmt(inv.waterAmount)})` : ''} · Paid {fmt(inv.amountPaid)}</p>
+                            <p className="text-sm text-slate-500 dark:text-slate-400">Due {fmt(inv.amountDue)}{inv.waterAmount > 0 ? ` (rent ${fmt(inv.amountDue - inv.waterAmount - (inv.otherCharges || []).reduce((s, c) => s + c.amount, 0))} + water ${fmt(inv.waterAmount)}` : ''}{(inv.otherCharges || []).length > 0 ? ` + ${fmt((inv.otherCharges || []).reduce((s, c) => s + c.amount, 0))} charges` : ''} · Paid {fmt(inv.amountPaid)}</p>
                             <p className={`text-lg font-bold ${balance > 0 ? 'text-rose-600 dark:text-rose-300' : 'text-emerald-600 dark:text-emerald-300'}`}>Balance {fmt(balance)}</p>
                             <div className="mt-2 flex items-center justify-end gap-2">
                               <span className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${effectiveStatus === 'paid' ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : effectiveStatus === 'partial' ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300' : effectiveStatus === 'overdue' ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300' : 'bg-orange-500/15 text-orange-700 dark:text-orange-300'}`}>{effectiveStatus}</span>

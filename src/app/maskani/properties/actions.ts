@@ -3,8 +3,28 @@
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { requireMaskaniPermission, resolveActionOrgId } from '@/lib/maskani'
+import { Prisma } from '@prisma/client'
 
 const resolveOrgId = (orgParam?: string | null) => resolveActionOrgId(orgParam, 'maskani.properties')
+
+/** Parses the extraCharges form field: a JSON array of { label, amount }. */
+function parseExtraCharges(raw: FormDataEntryValue | null): { label: string; amount: number }[] {
+  const str = String(raw || '').trim()
+  if (!str) return []
+  let parsed: unknown
+  try { parsed = JSON.parse(str) } catch { throw new Error('Invalid extra charges data') }
+  if (!Array.isArray(parsed)) throw new Error('Invalid extra charges data')
+  const out: { label: string; amount: number }[] = []
+  for (const item of parsed) {
+    if (!item || typeof item !== 'object') continue
+    const label = String((item as Record<string, unknown>).label || '').trim().slice(0, 60)
+    const amount = Number((item as Record<string, unknown>).amount)
+    if (!label || !Number.isFinite(amount) || amount < 0) continue
+    out.push({ label, amount: Math.round(amount * 100) / 100 })
+    if (out.length >= 10) break
+  }
+  return out
+}
 
 export async function createProperty(formData: FormData) {
   const orgId = await resolveOrgId(String(formData.get('orgId') || ''))
@@ -69,6 +89,8 @@ export async function createUnit(formData: FormData) {
   const monthlyRent = Number(formData.get('monthlyRent') || 0)
   const depositAmount = Number(formData.get('depositAmount') || 0)
   const waterRatePerUnit = Number(formData.get('waterRatePerUnit') || 0)
+  const unitType = String(formData.get('unitType') || '').trim() || null
+  const extraCharges = parseExtraCharges(formData.get('extraCharges'))
   const status = String(formData.get('status') || 'vacant') as 'vacant' | 'occupied' | 'maintenance'
 
   if (!propertyId || !unitNumber) throw new Error('Property and unit number are required')
@@ -87,7 +109,7 @@ export async function createUnit(formData: FormData) {
   if (floor !== null && (!Number.isInteger(floor))) throw new Error('Floor must be a whole number')
 
   await prisma.unit.create({
-    data: { organizationId: orgId, propertyId, unitNumber, floor, monthlyRent, depositAmount, waterRatePerUnit, status },
+    data: { organizationId: orgId, propertyId, unitNumber, unitType, floor, monthlyRent, depositAmount, waterRatePerUnit, extraCharges: extraCharges as Prisma.InputJsonValue, status },
   })
   revalidatePath('/maskani')
   revalidatePath('/maskani/properties')
@@ -103,6 +125,8 @@ export async function updateUnit(formData: FormData) {
   const monthlyRent = Number(formData.get('monthlyRent') || 0)
   const depositAmount = Number(formData.get('depositAmount') || 0)
   const waterRatePerUnit = Number(formData.get('waterRatePerUnit') || 0)
+  const unitType = String(formData.get('unitType') || '').trim() || null
+  const extraCharges = parseExtraCharges(formData.get('extraCharges'))
   const status = String(formData.get('status') || 'vacant') as 'vacant' | 'occupied' | 'maintenance'
 
   if (!id || !propertyId || !unitNumber) throw new Error('Missing required fields')
@@ -122,7 +146,7 @@ export async function updateUnit(formData: FormData) {
 
   const res = await prisma.unit.updateMany({
     where: { id, organizationId: orgId },
-    data: { propertyId, unitNumber, floor, monthlyRent, depositAmount, waterRatePerUnit, status },
+    data: { propertyId, unitNumber, unitType, floor, monthlyRent, depositAmount, waterRatePerUnit, extraCharges: extraCharges as Prisma.InputJsonValue, status },
   })
   if (res.count === 0) throw new Error('Unit not found')
   revalidatePath('/maskani')

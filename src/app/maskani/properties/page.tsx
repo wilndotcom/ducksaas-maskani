@@ -61,7 +61,7 @@ export default async function PropertiesPage({ searchParams }: { searchParams: P
     include: {
       units: {
         orderBy: { unitNumber: 'asc' },
-        select: { id: true, unitNumber: true, floor: true, monthlyRent: true, depositAmount: true, waterRatePerUnit: true, status: true, propertyId: true },
+        select: { id: true, unitNumber: true, unitType: true, floor: true, monthlyRent: true, depositAmount: true, waterRatePerUnit: true, extraCharges: true, status: true, propertyId: true },
       },
     },
   })
@@ -75,10 +75,12 @@ export default async function PropertiesPage({ searchParams }: { searchParams: P
     units: p.units.map((u) => ({
       id: u.id,
       unitNumber: u.unitNumber,
+      unitType: u.unitType,
       floor: u.floor,
       monthlyRent: u.monthlyRent,
       depositAmount: u.depositAmount,
       waterRatePerUnit: u.waterRatePerUnit,
+      extraCharges: (Array.isArray(u.extraCharges) ? u.extraCharges : []) as { label: string; amount: number }[],
       status: u.status as 'vacant' | 'occupied' | 'maintenance',
       propertyId: u.propertyId,
     })),

@@ -43,6 +43,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
         amountDue: i.amountDue,
         amountPaid: i.amountPaid,
         waterAmount: i.waterAmount,
+        otherCharges: (Array.isArray(i.otherCharges) ? i.otherCharges : []) as { label: string; amount: number }[],
         dueDate: i.dueDate.toISOString().slice(0, 10),
         status: i.status as 'unpaid' | 'partial' | 'paid' | 'overdue',
         tenantName: i.tenant.name,
