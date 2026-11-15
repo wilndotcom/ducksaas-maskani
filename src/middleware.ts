@@ -1,26 +1,28 @@
-import { withAuth } from 'next-auth/middleware'
-import { NextResponse } from 'next/server'
+import { getToken } from 'next-auth/jwt'
+import { NextRequest, NextResponse } from 'next/server'
 
-export default withAuth(
-  function middleware(req) {
-    const token = req.nextauth.token
-    const path = req.nextUrl.pathname
+export default async function middleware(req: NextRequest) {
+  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
+  const path = req.nextUrl.pathname
 
-    // Super admin routes - only super_admin can access /ducksaas
-    if (path.startsWith('/ducksaas')) {
-      if (token?.globalRole !== 'super_admin') {
-        return NextResponse.redirect(new URL('/maskani', req.url))
-      }
+  // DuckSaaS admin area - dedicated admin sign-in, super_admin only
+  if (path === '/ducksaas' || path.startsWith('/ducksaas/')) {
+    if (!token) {
+      return NextResponse.redirect(new URL('/auth/admin', req.url))
     }
-
+    if (token.globalRole !== 'super_admin') {
+      return NextResponse.redirect(new URL('/maskani', req.url))
+    }
     return NextResponse.next()
-  },
-  {
-    callbacks: {
-      authorized: ({ token }) => !!token
-    }
   }
-)
+
+  // Maskani workspace + tenant portal - shared sign-in page
+  if (!token) {
+    return NextResponse.redirect(new URL('/auth/signin', req.url))
+  }
+
+  return NextResponse.next()
+}
 
 export const config = {
   matcher: [

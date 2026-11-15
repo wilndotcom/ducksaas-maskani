@@ -87,7 +87,7 @@ export default async function Home() {
                 <li className="flex items-center gap-2"><Users className="h-4 w-4 text-violet-300" /> Organization provisioning &amp; ownership</li>
                 <li className="flex items-center gap-2"><Shield className="h-4 w-4 text-fuchsia-300" /> Settings, themes, and platform controls</li>
               </ul>
-              <Link href="/auth/signin" className="mt-6 inline-flex items-center gap-2 rounded-xl bg-white/10 px-5 py-2.5 text-sm font-semibold text-white ring-1 ring-white/15 hover:bg-white/15">
+              <Link href="/auth/admin" className="mt-6 inline-flex items-center gap-2 rounded-xl bg-white/10 px-5 py-2.5 text-sm font-semibold text-white ring-1 ring-white/15 hover:bg-white/15">
                 Open Admin Portal <ArrowRight className="h-4 w-4" />
               </Link>
             </div>

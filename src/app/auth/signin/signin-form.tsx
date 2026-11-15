@@ -60,7 +60,7 @@ export function SignInForm() {
             <h1 className="text-3xl font-extrabold sm:text-4xl">
               Welcome <span className="bg-gradient-to-r from-fuchsia-400 via-cyan-300 to-emerald-300 bg-clip-text text-transparent">back</span>
             </h1>
-            <p className="mt-2 text-slate-300">Sign in to your DuckSaaS & Maskani workspace</p>
+            <p className="mt-2 text-slate-300">Sign in to Maskani — your property workspace or tenant portal</p>
           </div>
 
           <div className="rounded-3xl border border-white/10 bg-white/10 p-6 shadow-2xl backdrop-blur-xl sm:p-8">
@@ -131,11 +131,13 @@ export function SignInForm() {
               <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
                 <p className="mb-2 text-center text-sm font-medium text-slate-200">Demo credentials</p>
                 <div className="space-y-1.5 text-xs text-slate-400">
-                  <p><span className="text-fuchsia-300">Admin:</span> admin@ducksaas.com / admin123</p>
                   <p><span className="text-cyan-300">Landlord:</span> john@landlord1.com / landlord123</p>
                   <p><span className="text-emerald-300">Tenant:</span> mary@tenant.com / tenant123</p>
                 </div>
               </div>
+              <p className="mt-3 text-center text-xs text-slate-400">
+                Platform administrator? <Link href="/auth/admin" className="font-medium text-cyan-300 hover:text-cyan-200">Use the admin sign in</Link>
+              </p>
             </div>
           </div>
 
