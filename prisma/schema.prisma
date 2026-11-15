@@ -131,6 +131,7 @@ model User {
   rentPayments       RentPayment[] @relation("TenantPayments")
   maintenanceTickets MaintenanceTicket[] @relation("TenantTickets")
   complaints         Complaint[] @relation("TenantComplaints")
+  notifications      Notification[]
 
   @@map("users")
 }
@@ -162,6 +163,7 @@ model Organization {
   maintenanceTickets   MaintenanceTicket[]
   complaints           Complaint[]
   waterReadings        WaterReading[]
+  notifications        Notification[]
 
   @@index([ownerUserId])
   @@index([slug])
@@ -316,6 +318,8 @@ model Lease {
   startDate         DateTime    @map("start_date")
   endDate           DateTime    @map("end_date")
   billingDayOfMonth Int         @map("billing_day_of_month")
+  depositAmount   Float        @default(0) @map("deposit_amount")
+  depositStatus   String       @default("pending") @map("deposit_status") // pending | invoiced | collected | refunded | forfeited
   status            LeaseStatus @default(active)
   createdAt         DateTime    @default(now()) @map("created_at")
   updatedAt         DateTime    @updatedAt @map("updated_at")
@@ -345,6 +349,7 @@ model Invoice {
   amountDue         Float         @map("amount_due")
   amountPaid        Float         @default(0) @map("amount_paid")
   waterAmount       Float         @default(0) @map("water_amount")
+  lateFee           Float         @default(0) @map("late_fee")
   otherCharges      Json?         @map("other_charges")
   dueDate           DateTime      @map("due_date")
   status            InvoiceStatus @default(unpaid)
@@ -377,6 +382,7 @@ model RentPayment {
   amount           Float
   paymentMethod    PaymentMethod @map("payment_method")
   gatewayReference String?       @map("gateway_reference")
+  receiptNumber    String?       @map("receipt_number")
   paidAt           DateTime      @map("paid_at")
   createdAt        DateTime      @default(now()) @map("created_at")
 
@@ -389,6 +395,7 @@ model RentPayment {
   @@index([invoiceId])
   @@index([tenantUserId])
   @@index([paidAt])
+  @@index([receiptNumber])
   @@map("rent_payments")
 }
 
@@ -503,4 +510,23 @@ model Complaint {
   @@index([status])
   @@index([priority])
   @@map("complaints")
+}
+
+model Notification {
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
+  userId         String       @map("user_id")
+  type           String       // invoice | payment | ticket | complaint | lease | system
+  title          String
+  body           String?
+  link           String?
+  read           Boolean      @default(false)
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@index([organizationId])
+  @@map("notifications")
 }

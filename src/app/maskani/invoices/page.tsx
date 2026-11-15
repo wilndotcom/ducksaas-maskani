@@ -49,7 +49,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
         tenantName: i.tenant.name,
         tenantEmail: i.tenant.email,
         unitLabel: `${i.unit.property.name} - ${i.unit.unitNumber}`,
-        payments: i.payments.map((p) => ({ id: p.id, amount: p.amount, method: p.paymentMethod, reference: p.gatewayReference, paidAt: p.paidAt.toISOString().slice(0, 10) })),
+        payments: i.payments.map((p) => ({ id: p.id, amount: p.amount, method: p.paymentMethod, reference: p.receiptNumber || p.gatewayReference, paidAt: p.paidAt.toISOString().slice(0, 10) })),
       }))}
       leases={leases.map((l) => ({ id: l.id, label: `${l.tenant.name} · ${l.unit.property.name} - ${l.unit.unitNumber}`, monthlyRent: l.unit.monthlyRent }))}
     />

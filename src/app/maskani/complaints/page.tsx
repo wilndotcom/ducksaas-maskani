@@ -65,6 +65,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
     { href: `/maskani/invoices${orgQuery}`, label: 'Rent & Invoices' },
     { href: `/maskani/maintenance${orgQuery}`, label: 'Maintenance' },
     { href: `/maskani/complaints${orgQuery}`, label: 'Complaints', active: true },
+    { href: `/maskani/notifications${orgQuery}`, label: 'Notifications' },
     { href: `/maskani/settings${orgQuery}`, label: 'Settings' },
   ]
 

@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
-import { Sparkles, Home, FileText, Wrench, MessageSquareWarning, Receipt } from 'lucide-react'
+import { Sparkles, Home, FileText, Wrench, MessageSquareWarning, Receipt, Bell } from 'lucide-react'
 import { MobileNav } from '@/components/mobile-nav'
 
 export const instant = false
@@ -14,6 +14,7 @@ const nav = [
   { href: '/portal/statement', label: 'Statement', icon: Receipt },
   { href: '/portal/maintenance', label: 'Maintenance', icon: Wrench },
   { href: '/portal/complaints', label: 'Complaints', icon: MessageSquareWarning },
+  { href: '/portal/notifications', label: 'Notifications', icon: Bell },
 ]
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {

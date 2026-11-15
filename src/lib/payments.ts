@@ -1,6 +1,7 @@
 import { prisma } from './prisma'
 import { notifyTelegram } from './telegram'
 import { sendPaymentReceiptEmail } from './email'
+import { orgBillingSettings } from './org-settings'
 import type { PaymentGatewayProvider, Prisma } from '@prisma/client'
 
 export type GatewayCredentials = Record<string, string>
@@ -286,6 +287,7 @@ export async function applySuccessfulPayment(params: {
 
     const newPaid = invoice.amountPaid + amount
     if (newPaid > invoice.amountDue + 0.01) return { overpaid: true as const, amountDue: invoice.amountDue, amountPaid: invoice.amountPaid }
+    const paymentCount = await tx.rentPayment.count({ where: { invoiceId: invoice.id } })
     await tx.rentPayment.create({
       data: {
         organizationId,
@@ -294,6 +296,7 @@ export async function applySuccessfulPayment(params: {
         amount,
         paymentMethod: params.paymentMethod,
         gatewayReference: params.gatewayReference || null,
+        receiptNumber: `${invoice.invoiceNumber}-R${String(paymentCount + 1).padStart(3, '0')}`,
         paidAt: params.paidAt || new Date(),
       },
     })
@@ -316,8 +319,7 @@ export async function applySuccessfulPayment(params: {
       prisma.invoice.findUnique({ where: { id: result.invoiceId }, select: { tenant: { select: { name: true, email: true } } } }),
       prisma.organization.findUnique({ where: { id: organizationId }, select: { name: true, settings: true } }),
     ])
-    const orgSettings = (org?.settings as Record<string, unknown>) || {}
-    const currency = String(orgSettings.currency || 'KES')
+    const currency = orgBillingSettings(org?.settings).currency
     if (invoice && tenant?.tenant?.email) {
       sendPaymentReceiptEmail({
         to: tenant.tenant.email,

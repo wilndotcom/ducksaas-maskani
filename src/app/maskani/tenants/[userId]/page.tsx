@@ -4,8 +4,9 @@ import { cookies } from 'next/headers'
 import { getSavedCurrency, formatCurrency } from '@/lib/currency'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, User, Home, FileText, Wrench, MessageSquareWarning, Mail, Phone, Droplets, CalendarDays } from 'lucide-react'
+import { ArrowLeft, User, Home, FileText, Wrench, MessageSquareWarning, Mail, Phone, Droplets, CalendarDays, ShieldCheck } from 'lucide-react'
 import { MobileNav } from '@/components/mobile-nav'
+import { updateDepositStatus } from '../actions'
 
 export const instant = false
 
@@ -16,6 +17,7 @@ const nav = (orgQuery: string) => [
   { href: `/maskani/invoices${orgQuery}`, label: 'Rent & Invoices' },
   { href: `/maskani/maintenance${orgQuery}`, label: 'Maintenance' },
   { href: `/maskani/complaints${orgQuery}`, label: 'Complaints' },
+  { href: `/maskani/notifications${orgQuery}`, label: 'Notifications' },
   { href: `/maskani/settings${orgQuery}`, label: 'Settings' },
 ]
 
@@ -155,6 +157,44 @@ export default async function TenantDetailPage({
                           <p className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300"><CalendarDays className="h-3.5 w-3.5 text-slate-400" /> {l.startDate.toLocaleDateString()} → {l.endDate.toLocaleDateString()}</p>
                           <p className="text-slate-600 dark:text-slate-300">Bills on day <strong>{l.billingDayOfMonth}</strong> of each month</p>
                         </div>
+                        {l.depositAmount > 0 && (
+                          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-200/60 pt-3 dark:border-white/10">
+                            <ShieldCheck className="h-4 w-4 text-amber-500" />
+                            <span className="text-sm text-slate-600 dark:text-slate-300">
+                              Deposit: <strong>{formatCurrency(l.depositAmount, currency)}</strong>
+                            </span>
+                            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${
+                              l.depositStatus === 'collected' ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                              : l.depositStatus === 'refunded' ? 'bg-sky-500/15 text-sky-700 dark:text-sky-300'
+                              : l.depositStatus === 'forfeited' ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300'
+                              : 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                            }`}>{l.depositStatus}</span>
+                            {['pending', 'invoiced'].includes(l.depositStatus) && (
+                              <form action={updateDepositStatus} className="inline">
+                                <input type="hidden" name="orgId" value={org.id} />
+                                <input type="hidden" name="leaseId" value={l.id} />
+                                <input type="hidden" name="depositStatus" value="collected" />
+                                <button className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-700">Mark collected</button>
+                              </form>
+                            )}
+                            {l.depositStatus === 'collected' && l.status === 'terminated' && (
+                              <>
+                                <form action={updateDepositStatus} className="inline">
+                                  <input type="hidden" name="orgId" value={org.id} />
+                                  <input type="hidden" name="leaseId" value={l.id} />
+                                  <input type="hidden" name="depositStatus" value="refunded" />
+                                  <button className="rounded-lg border border-sky-300 px-2.5 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-50 dark:border-sky-500/30 dark:text-sky-300 dark:hover:bg-sky-500/10">Refund</button>
+                                </form>
+                                <form action={updateDepositStatus} className="inline">
+                                  <input type="hidden" name="orgId" value={org.id} />
+                                  <input type="hidden" name="leaseId" value={l.id} />
+                                  <input type="hidden" name="depositStatus" value="forfeited" />
+                                  <button className="rounded-lg border border-rose-300 px-2.5 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50 dark:border-rose-500/30 dark:text-rose-300 dark:hover:bg-rose-500/10">Forfeit</button>
+                                </form>
+                              </>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

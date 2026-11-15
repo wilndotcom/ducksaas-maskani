@@ -7,6 +7,7 @@ import { authOptions } from '@/lib/auth'
 import { resolveMaskaniOrg } from '@/lib/maskani'
 import { requireMaskaniPermission } from '@/lib/maskani'
 import { assertOrganizationWritable } from '@/lib/subscription-enforcement'
+import { notifyUser } from '@/lib/notifications'
 
 export async function createComplaint(formData: FormData) {
   const session = await getServerSession(authOptions)
@@ -50,13 +51,24 @@ export async function updateComplaintStatus(formData: FormData) {
   if (!id) throw new Error('Missing complaint id')
   if (!['open', 'in_progress', 'resolved', 'closed'].includes(status)) throw new Error('Invalid status')
 
-  const existing = await prisma.complaint.findFirst({ where: { id, organizationId: org.id }, select: { id: true } })
+  const existing = await prisma.complaint.findFirst({
+    where: { id, organizationId: org.id },
+    select: { id: true, tenantUserId: true, subject: true },
+  })
   if (!existing) throw new Error('Complaint not found')
 
   await prisma.complaint.update({
     where: { id },
     data: { status, resolutionNote: ['resolved', 'closed'].includes(status) ? resolutionNote : null },
   })
+  if (['resolved', 'closed'].includes(status) && existing.tenantUserId) {
+    await notifyUser(existing.tenantUserId, org.id, {
+      type: 'complaint',
+      title: `Complaint ${status} — ${existing.subject}`,
+      body: resolutionNote || 'Your complaint has been updated. Check the portal for details.',
+      link: '/portal/complaints',
+    }).catch(() => {})
+  }
   revalidatePath('/maskani/complaints')
   revalidatePath('/maskani')
 }

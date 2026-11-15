@@ -232,6 +232,7 @@ export default async function MaskaniPage({ searchParams }: { searchParams: Prom
     { href: `/maskani/invoices${orgQuery}`, label: 'Rent & Invoices' },
     { href: `/maskani/maintenance${orgQuery}`, label: 'Maintenance' },
     { href: `/maskani/complaints${orgQuery}`, label: 'Complaints' },
+    { href: `/maskani/notifications${orgQuery}`, label: 'Notifications' },
     { href: `/maskani/settings${orgQuery}`, label: 'Settings' },
   ]
 

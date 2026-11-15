@@ -6,6 +6,8 @@ import bcrypt from 'bcryptjs'
 import { sendWelcomeEmail } from '@/lib/email'
 import { generateUniqueUsername } from '@/lib/username'
 import { requireMaskaniPermission, resolveActionOrgId } from '@/lib/maskani'
+import { notifyUser, notifyOrgRoles } from '@/lib/notifications'
+import { orgBillingSettings } from '@/lib/org-settings'
 
 const resolveOrgId = (orgParam?: string | null) => resolveActionOrgId(orgParam, 'maskani.tenants')
 
@@ -30,12 +32,13 @@ export async function createLease(formData: FormData) {
   const tenantPhone = String(formData.get('tenantPhone') || '').trim()
   const tenantPassword = String(formData.get('tenantPassword') || '')
 
-  const [unit, existingTenant] = await Promise.all([
+  const [unit, existingTenant, org] = await Promise.all([
     prisma.unit.findFirst({
       where: { id: unitId, organizationId: orgId },
-      select: { id: true, status: true, _count: { select: { leases: { where: { status: 'active' } } } } },
+      select: { id: true, status: true, depositAmount: true, _count: { select: { leases: { where: { status: 'active' } } } } },
     }),
     prisma.user.findUnique({ where: { email: tenantEmail }, select: { id: true } }),
+    prisma.organization.findUnique({ where: { id: orgId }, select: { name: true, settings: true } }),
   ])
   if (!unit) throw new Error('Selected unit not found in this organization')
   if (status === 'active') {
@@ -64,8 +67,13 @@ export async function createLease(formData: FormData) {
     createdTenantAccount = true
   }
 
+  const bs = orgBillingSettings(org?.settings)
+  const depositAmount = unit.depositAmount || 0
+  const hasDeposit = depositAmount > 0
+  const invoicePrefix = bs.invoicePrefix
+
   await prisma.$transaction(async (tx) => {
-    await tx.lease.create({
+    const newLease = await tx.lease.create({
       data: {
         organizationId: orgId,
         unitId,
@@ -74,8 +82,27 @@ export async function createLease(formData: FormData) {
         endDate: end,
         billingDayOfMonth,
         status,
+        depositAmount,
+        depositStatus: hasDeposit ? 'invoiced' : 'collected',
       },
     })
+    // Security deposit invoice — one-off, due at move-in
+    if (hasDeposit) {
+      await tx.invoice.create({
+        data: {
+          organizationId: orgId,
+          leaseId: newLease.id,
+          unitId,
+          tenantUserId: tenant.id,
+          invoiceNumber: `${invoicePrefix}-DEP-${newLease.id.slice(-6).toUpperCase()}`,
+          billingMonth: 'move-in',
+          amountDue: depositAmount,
+          amountPaid: 0,
+          dueDate: start,
+          status: start < new Date() ? 'overdue' : 'unpaid',
+        },
+      })
+    }
     await tx.organizationMember.upsert({
       where: { organizationId_userId: { organizationId: orgId, userId: tenant.id } },
       update: { role: 'tenant', unitId },
@@ -87,7 +114,6 @@ export async function createLease(formData: FormData) {
   })
 
   if (createdTenantAccount) {
-    const org = await prisma.organization.findUnique({ where: { id: orgId }, select: { name: true } })
     sendWelcomeEmail({
       to: tenantEmail,
       name: tenantName,
@@ -96,6 +122,20 @@ export async function createLease(formData: FormData) {
       tempPassword: tenantPassword || undefined,
     }).catch(() => {})
   }
+  if (hasDeposit) {
+    await notifyUser(tenant.id, orgId, {
+      type: 'invoice',
+      title: 'Security deposit invoice',
+      body: `A deposit of ${depositAmount.toLocaleString()} ${bs.currency} is due for your new lease.`,
+      link: '/portal/invoices',
+    }).catch(() => {})
+  }
+  await notifyOrgRoles(orgId, ['landlord_admin'], {
+    type: 'lease',
+    title: `New lease — ${tenantEmail}`,
+    body: `A lease was created on unit ${unitId.slice(-4)} starting ${startDate}.`,
+    link: '/maskani/tenants',
+  }).catch(() => {})
 
   revalidatePath('/maskani')
   revalidatePath('/maskani/tenants')
@@ -123,7 +163,7 @@ export async function transferLease(formData: FormData) {
   const lease = await prisma.lease.findFirst({
     where: { id: leaseId, organizationId: orgId },
     select: {
-      id: true, unitId: true, tenantUserId: true, status: true, billingDayOfMonth: true,
+      id: true, unitId: true, tenantUserId: true, status: true, billingDayOfMonth: true, depositAmount: true,
       unit: { select: { unitNumber: true, property: { select: { name: true } } } },
     },
   })
@@ -140,15 +180,20 @@ export async function transferLease(formData: FormData) {
 
   const newUnit = await prisma.unit.findFirst({
     where: { id: newUnitId, organizationId: orgId },
-    select: { id: true, status: true, _count: { select: { leases: { where: { status: 'active' } } } } },
+    select: { id: true, status: true, depositAmount: true, _count: { select: { leases: { where: { status: 'active' } } } } },
   })
   if (!newUnit) throw new Error('Target unit not found in this organization')
   if (newUnit._count.leases > 0) throw new Error('Target unit already has an active lease')
   if (newUnit.status !== 'vacant') throw new Error('Target unit is not vacant')
 
+  // Deposit carries over; only the difference to the new unit's deposit is billed
+  const newDeposit = newUnit.depositAmount || 0
+  const depositDiff = Math.max(0, Math.round((newDeposit - (lease.depositAmount || 0)) * 100) / 100)
+  const invoicePrefix = orgBillingSettings((await prisma.organization.findUnique({ where: { id: orgId }, select: { settings: true } }))?.settings).invoicePrefix
+
   await prisma.$transaction(async (tx) => {
     await tx.lease.update({ where: { id: lease.id }, data: { status: 'terminated', endDate: transferDate } })
-    await tx.lease.create({
+    const newLease = await tx.lease.create({
       data: {
         organizationId: orgId,
         unitId: newUnitId,
@@ -157,8 +202,26 @@ export async function transferLease(formData: FormData) {
         endDate: newEnd,
         billingDayOfMonth,
         status: 'active',
+        depositAmount: newDeposit,
+        depositStatus: depositDiff > 0 ? 'invoiced' : 'collected',
       },
     })
+    if (depositDiff > 0) {
+      await tx.invoice.create({
+        data: {
+          organizationId: orgId,
+          leaseId: newLease.id,
+          unitId: newUnitId,
+          tenantUserId: lease.tenantUserId,
+          invoiceNumber: `${invoicePrefix}-DEP-${newLease.id.slice(-6).toUpperCase()}`,
+          billingMonth: 'move-in',
+          amountDue: depositDiff,
+          amountPaid: 0,
+          dueDate: transferDate,
+          status: transferDate < new Date() ? 'overdue' : 'unpaid',
+        },
+      })
+    }
     await tx.organizationMember.upsert({
       where: { organizationId_userId: { organizationId: orgId, userId: lease.tenantUserId } },
       update: { unitId: newUnitId },
@@ -173,6 +236,31 @@ export async function transferLease(formData: FormData) {
   revalidatePath('/maskani/tenants')
   revalidatePath('/maskani/properties')
   revalidatePath('/portal')
+}
+
+/** Move a lease's security deposit through its lifecycle: collected → refunded/forfeited. */
+export async function updateDepositStatus(formData: FormData) {
+  const orgId = await resolveOrgId(String(formData.get('orgId') || ''))
+  await requireMaskaniPermission('manage_tenants_leases', orgId)
+  const leaseId = String(formData.get('leaseId') || '')
+  const depositStatus = String(formData.get('depositStatus') || '')
+  if (!leaseId || !['collected', 'refunded', 'forfeited'].includes(depositStatus)) throw new Error('Invalid deposit status')
+  const lease = await prisma.lease.findFirst({
+    where: { id: leaseId, organizationId: orgId },
+    select: { id: true, tenantUserId: true, depositAmount: true },
+  })
+  if (!lease) throw new Error('Lease not found')
+  if (lease.depositAmount <= 0) throw new Error('This lease has no deposit')
+  await prisma.lease.update({ where: { id: leaseId }, data: { depositStatus } })
+  const label = depositStatus === 'collected' ? 'collected' : depositStatus === 'refunded' ? 'refunded to the tenant' : 'forfeited'
+  await notifyUser(lease.tenantUserId, orgId, {
+    type: 'lease',
+    title: `Security deposit ${label}`,
+    body: `Your security deposit of ${lease.depositAmount.toLocaleString()} has been ${label}.`,
+    link: '/portal',
+  }).catch(() => {})
+  revalidatePath('/maskani/tenants')
+  revalidatePath('/maskani/tenants/[userId]', 'page')
 }
 
 export async function updateLeaseStatus(formData: FormData) {

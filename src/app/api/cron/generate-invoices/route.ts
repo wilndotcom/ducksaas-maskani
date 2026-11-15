@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { notifyTelegram } from '@/lib/telegram'
 import { sendInvoiceEmail, sendPaymentReminderEmail } from '@/lib/email'
+import { notifyUser } from '@/lib/notifications'
+import { orgBillingSettings } from '@/lib/org-settings'
 
 /**
  * Generates monthly rent invoices for active leases.
@@ -43,10 +45,11 @@ export async function GET(req: Request) {
   const stale = await prisma.invoice.findMany({
     where: { status: 'unpaid', dueDate: { lt: now } },
     select: {
-      id: true, invoiceNumber: true, amountDue: true, amountPaid: true, dueDate: true,
+      id: true, invoiceNumber: true, amountDue: true, amountPaid: true, dueDate: true, lateFee: true,
       tenantUserId: true,
       tenant: { select: { name: true, email: true } },
-      organization: { select: { name: true, settings: true, status: true } },
+      lease: { select: { unit: { select: { monthlyRent: true } } } },
+      organization: { select: { id: true, name: true, settings: true, status: true } },
     },
   })
   for (const inv of stale) {
@@ -57,7 +60,28 @@ export async function GET(req: Request) {
     })
     if (updated.count === 0) continue
     overdueMarked++
-    const s = (inv.organization.settings as Record<string, unknown>) || {}
+    const bs = orgBillingSettings(inv.organization.settings)
+    // Apply a one-time late fee when the invoice first goes overdue
+    if (bs.lateFeeEnabled && bs.lateFeeValue > 0 && inv.lateFee === 0 && inv.amountPaid < inv.amountDue - 0.01) {
+      const daysLate = Math.max(1, Math.floor((now.getTime() - inv.dueDate.getTime()) / 86400000))
+      const fee = bs.lateFeeType === 'percent'
+        ? Math.round(((inv.lease?.unit.monthlyRent || inv.amountDue) * bs.lateFeeValue) / 100 * 100) / 100
+        : bs.lateFeeType === 'daily'
+          ? Math.round(bs.lateFeeValue * Math.min(daysLate, 30) * 100) / 100
+          : bs.lateFeeValue
+      if (fee > 0) {
+        await prisma.invoice.update({
+          where: { id: inv.id },
+          data: { amountDue: inv.amountDue + fee, lateFee: fee },
+        }).catch(() => {})
+      }
+    }
+    await notifyUser(inv.tenantUserId, inv.organization.id, {
+      type: 'invoice',
+      title: `Invoice ${inv.invoiceNumber} is overdue`,
+      body: `Please settle your balance of ${inv.amountDue.toLocaleString()} ${bs.currency} to avoid further action.`,
+      link: '/portal/invoices',
+    }).catch(() => {})
     if (inv.tenant.email) {
       sendPaymentReminderEmail({
         to: inv.tenant.email,
@@ -66,7 +90,7 @@ export async function GET(req: Request) {
         invoiceNumber: inv.invoiceNumber,
         amountDue: inv.amountDue,
         amountPaid: inv.amountPaid,
-        currency: String(s.currency || 'KES'),
+        currency: bs.currency,
         dueDate: inv.dueDate,
         portalUrl: `${(process.env.NEXTAUTH_URL || 'http://localhost:3000').replace(/\/$/, '')}/portal/invoices`,
       }).catch(() => {})
@@ -91,9 +115,9 @@ export async function GET(req: Request) {
         continue
       }
 
-      const s = (lease.organization.settings as Record<string, unknown>) || {}
-      const prefix = String(s.invoice_prefix || 'INV').replace(/[^A-Za-z0-9-]/g, '').slice(0, 10) || 'INV'
-      const graceDays = Number.isFinite(Number(s.payment_grace_days)) ? Math.max(0, Math.min(60, Number(s.payment_grace_days))) : 0
+      const bs = orgBillingSettings(lease.organization.settings)
+      const prefix = bs.invoicePrefix
+      const graceDays = bs.graceDays
       const rentAmount = lease.unit.monthlyRent
       // Recurring extra charges configured on the unit (internet, retainer, etc.)
       const unitCharges = Array.isArray(lease.unit.extraCharges)
@@ -143,8 +167,17 @@ export async function GET(req: Request) {
           },
           select: { id: true, amount: true },
         })
+        // Prorate rent for the lease's first month when it starts mid-month:
+        // charge only the remaining days of that month.
+        const isStartMonth = lease.startDate.getFullYear() === by && lease.startDate.getMonth() === bm
+        const startDay = lease.startDate.getDate()
+        let monthRent = rentAmount
+        if (isStartMonth && startDay > 1) {
+          const daysInMonth = new Date(by, bm + 1, 0).getDate()
+          monthRent = Math.round(rentAmount * ((daysInMonth - startDay + 1) / daysInMonth) * 100) / 100
+        }
         const waterAmount = waterReadings.reduce((sum, r) => sum + r.amount, 0)
-        const amountDue = rentAmount + waterAmount + otherChargesTotal
+        const amountDue = monthRent + waterAmount + otherChargesTotal
         if (!Number.isFinite(amountDue) || amountDue <= 0) {
           skipped++
           continue
@@ -184,10 +217,16 @@ export async function GET(req: Request) {
             orgName: lease.organization.name,
             invoiceNumber: invoice.invoiceNumber,
             amount: amountDue,
-            currency: String(s.currency || 'KES'),
+            currency: bs.currency,
             dueDate: dueDate.toLocaleDateString(),
           }).catch(() => {})
         }
+        await notifyUser(lease.tenant.id, lease.organizationId, {
+          type: 'invoice',
+          title: `New invoice ${invoice.invoiceNumber}`,
+          body: `${lease.organization.name} billed you ${amountDue.toLocaleString()} ${bs.currency} for ${billingMonth}.`,
+          link: '/portal/invoices',
+        }).catch(() => {})
       }
     } catch (e) {
       errors.push(`${lease.id}: ${e instanceof Error ? e.message : String(e)}`)
@@ -214,9 +253,9 @@ export async function GET(req: Request) {
     try {
       const l = reading.lease
       if (!l || l.organization.status === 'suspended_readonly') continue
-      const s = (l.organization.settings as Record<string, unknown>) || {}
-      const prefix = String(s.invoice_prefix || 'INV').replace(/[^A-Za-z0-9-]/g, '').slice(0, 10) || 'INV'
-      const graceDays = Number.isFinite(Number(s.payment_grace_days)) ? Math.max(0, Math.min(60, Number(s.payment_grace_days))) : 0
+      const bs = orgBillingSettings(l.organization.settings)
+      const prefix = bs.invoicePrefix
+      const graceDays = bs.graceDays
       const dueDate = new Date(year, month, l.billingDayOfMonth)
       dueDate.setDate(dueDate.getDate() + graceDays)
 
@@ -256,7 +295,7 @@ export async function GET(req: Request) {
             orgName: l.organization.name,
             invoiceNumber: invoice.invoiceNumber,
             amount: reading.amount,
-            currency: String(s.currency || 'KES'),
+            currency: bs.currency,
             dueDate: dueDate.toLocaleDateString(),
           }).catch(() => {})
         }

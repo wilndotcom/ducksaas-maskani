@@ -18,6 +18,8 @@ export function InvoicesManager({ organization, orgQuery, roleLabel, invoices, l
   const [showCreate, setShowCreate] = useState(false)
   const [payFor, setPayFor] = useState<Invoice | null>(null)
   const [selectedLease, setSelectedLease] = useState('')
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
   const inputCls = 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-500/20 dark:border-white/10 dark:bg-slate-900/60 dark:text-white'
   const flash = (m: string) => { setMsg(m); setTimeout(() => setMsg(null), 2500) }
   const run = (fn: () => Promise<void>, success: string, close?: () => void) => startTransition(async () => { try { await fn(); flash(success); close?.() } catch (e) { flash(e instanceof Error ? e.message : 'Action failed') } })
@@ -30,6 +32,15 @@ export function InvoicesManager({ organization, orgQuery, roleLabel, invoices, l
     return { due, paid, outstanding, unpaidCount, total: invoices.length }
   }, [invoices])
 
+  const filteredInvoices = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return invoices.filter((i) => {
+      if (statusFilter !== 'all' && i.status !== statusFilter) return false
+      if (!q) return true
+      return [i.invoiceNumber, i.billingMonth, i.tenantName, i.tenantEmail, i.unitLabel].some((v) => v.toLowerCase().includes(q))
+    })
+  }, [invoices, search, statusFilter])
+
   const nav = [
     { href: `/maskani${orgQuery}`, label: 'Dashboard' },
     { href: `/maskani/properties${orgQuery}`, label: 'Properties & Units' },
@@ -37,6 +48,7 @@ export function InvoicesManager({ organization, orgQuery, roleLabel, invoices, l
     { href: `/maskani/invoices${orgQuery}`, label: 'Rent & Invoices', active: true },
     { href: `/maskani/maintenance${orgQuery}`, label: 'Maintenance' },
     { href: `/maskani/complaints${orgQuery}`, label: 'Complaints' },
+    { href: `/maskani/notifications${orgQuery}`, label: 'Notifications' },
     { href: `/maskani/settings${orgQuery}`, label: 'Settings' },
   ]
 
@@ -108,12 +120,25 @@ export function InvoicesManager({ organization, orgQuery, roleLabel, invoices, l
             )}
 
             <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-6 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
-              <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold"><Receipt className="h-5 w-5 text-violet-500" /> Invoices</h3>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <h3 className="flex items-center gap-2 text-lg font-semibold"><Receipt className="h-5 w-5 text-violet-500" /> Invoices</h3>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search tenant, invoice, unit..." className="w-56 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm outline-none focus:border-violet-400 dark:border-white/10 dark:bg-slate-900/60 dark:text-white" />
+                  <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm outline-none dark:border-white/10 dark:bg-slate-900/60 dark:text-white">
+                    <option value="all">All statuses</option>
+                    <option value="unpaid">Unpaid</option>
+                    <option value="partial">Partial</option>
+                    <option value="paid">Paid</option>
+                    <option value="overdue">Overdue</option>
+                  </select>
+                </div>
+              </div>
               {invoices.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/70 p-8 text-center text-sm text-slate-600 dark:border-white/15 dark:bg-slate-900/30 dark:text-slate-300">No invoices yet. Create an invoice for an active lease to start tracking rent and payments for {organization.name}.</div>
               ) : (
                 <div className="space-y-3">
-                  {invoices.map((inv) => {
+                  {filteredInvoices.length === 0 && <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">No invoices match your search.</p>}
+                  {filteredInvoices.map((inv) => {
                     const balance = Math.max(0, inv.amountDue - inv.amountPaid)
                     const effectiveStatus = inv.status === 'unpaid' && inv.dueDate < new Date().toISOString().slice(0, 10) ? 'overdue' : inv.status
                     return (

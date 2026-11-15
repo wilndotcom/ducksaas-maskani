@@ -7,6 +7,7 @@ import { authOptions } from '@/lib/auth'
 import { initiateInvoicePayment, type InitiateResult } from '@/lib/payments'
 import { syncOrganizationSubscription } from '@/lib/subscription-enforcement'
 import type { PaymentGatewayProvider } from '@prisma/client'
+import { notifyOrgRoles } from '@/lib/notifications'
 
 async function requireTenant() {
   const session = await getServerSession(authOptions)
@@ -71,18 +72,33 @@ export async function tenantCreateTicket(formData: FormData) {
   if (!['plumbing', 'electrical', 'structural', 'other'].includes(category)) throw new Error('Invalid category')
   if (!['low', 'medium', 'high'].includes(priority)) throw new Error('Invalid priority')
 
-  await prisma.maintenanceTicket.create({
-    data: {
-      organizationId: membership.organizationId,
-      unitId,
-      tenantUserId: session.user.id,
-      category,
-      priority,
-      title,
-      description,
-      status: 'open',
-    },
+  const needsMaintenance = priority === 'high' || category === 'structural'
+  await prisma.$transaction(async (tx) => {
+    await tx.maintenanceTicket.create({
+      data: {
+        organizationId: membership.organizationId,
+        unitId,
+        tenantUserId: session.user.id,
+        category,
+        priority,
+        title,
+        description,
+        status: 'open',
+      },
+    })
+    if (needsMaintenance) {
+      await tx.unit.updateMany({
+        where: { id: unitId, status: { in: ['vacant', 'occupied'] } },
+        data: { status: 'maintenance' },
+      })
+    }
   })
+  await notifyOrgRoles(membership.organizationId, ['landlord_admin', 'caretaker'], {
+    type: 'ticket',
+    title: `New maintenance request — ${title}`,
+    body: `${session.user.name || 'A tenant'} reported a ${priority}-priority ${category} issue.`,
+    link: '/maskani/maintenance',
+  }).catch(() => {})
   revalidatePath('/portal/maintenance')
 }
 
@@ -109,5 +125,11 @@ export async function tenantCreateComplaint(formData: FormData) {
       status: 'open',
     },
   })
+  await notifyOrgRoles(membership.organizationId, ['landlord_admin', 'caretaker'], {
+    type: 'complaint',
+    title: `New complaint — ${subject}`,
+    body: `${session.user.name || 'A tenant'} submitted a ${priority}-priority complaint.`,
+    link: '/maskani/complaints',
+  }).catch(() => {})
   revalidatePath('/portal/complaints')
 }

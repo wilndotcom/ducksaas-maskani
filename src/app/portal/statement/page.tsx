@@ -2,7 +2,7 @@ import { resolveTenantContext } from '@/lib/portal'
 import { prisma } from '@/lib/prisma'
 import { formatCurrency, getSavedCurrency } from '@/lib/currency'
 import { cookies } from 'next/headers'
-import { Receipt } from 'lucide-react'
+import { Receipt, Droplets } from 'lucide-react'
 import { PrintButton } from './print-button'
 
 export const instant = false
@@ -24,6 +24,13 @@ export default async function PortalStatement() {
         },
       },
     },
+  })
+
+  const waterReadings = await prisma.waterReading.findMany({
+    where: { organizationId: org.id, lease: { tenantUserId: session.user.id } },
+    orderBy: { periodMonth: 'desc' },
+    take: 12,
+    include: { unit: { select: { unitNumber: true, property: { select: { name: true } } } } },
   })
 
   const totalPaid = payments.reduce((s, p) => s + p.amount, 0)
@@ -81,7 +88,7 @@ export default async function PortalStatement() {
                       {p.invoice?.billingMonth ? <span className="ml-1 text-xs">({p.invoice.billingMonth})</span> : null}
                     </td>
                     <td className="py-2.5 pr-4 capitalize">{p.paymentMethod.replace(/_/g, ' ')}</td>
-                    <td className="py-2.5 pr-4 font-mono text-xs text-slate-500 dark:text-slate-400">{p.gatewayReference || '—'}</td>
+                    <td className="py-2.5 pr-4 font-mono text-xs text-slate-500 dark:text-slate-400">{p.receiptNumber || p.gatewayReference || '—'}</td>
                     <td className="py-2.5 text-right font-semibold">{formatCurrency(p.amount, currency)}</td>
                   </tr>
                 ))}
@@ -98,6 +105,38 @@ export default async function PortalStatement() {
           </>
         )}
       </div>
+
+      {waterReadings.length > 0 && (
+        <div className="mt-6 rounded-2xl border border-slate-200/80 bg-white/80 p-6 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
+          <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold"><Droplets className="h-5 w-5 text-cyan-500" /> Water Usage</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[480px] text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500 dark:border-white/10 dark:text-slate-400">
+                  <th className="pb-2 pr-4">Month</th>
+                  <th className="pb-2 pr-4">Unit</th>
+                  <th className="pb-2 pr-4 text-right">Meter</th>
+                  <th className="pb-2 pr-4 text-right">Used</th>
+                  <th className="pb-2 pr-4 text-right">Rate</th>
+                  <th className="pb-2 text-right">Charge</th>
+                </tr>
+              </thead>
+              <tbody>
+                {waterReadings.map((r) => (
+                  <tr key={r.id} className="border-b border-slate-100 dark:border-white/5">
+                    <td className="py-2.5 pr-4 font-medium">{r.periodMonth}</td>
+                    <td className="py-2.5 pr-4 text-slate-500 dark:text-slate-400">{r.unit.property.name} · {r.unit.unitNumber}</td>
+                    <td className="py-2.5 pr-4 text-right">{r.meterReading}</td>
+                    <td className="py-2.5 pr-4 text-right">{r.unitsConsumed}</td>
+                    <td className="py-2.5 pr-4 text-right">{formatCurrency(r.ratePerUnit, currency)}/unit</td>
+                    <td className="py-2.5 text-right font-semibold">{formatCurrency(r.amount, currency)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
