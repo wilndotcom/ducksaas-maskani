@@ -269,11 +269,37 @@ export default async function MaskaniPage({ searchParams }: { searchParams: Prom
                   </span>
                 </div>
                 <p className="text-slate-600 dark:text-slate-400">
-                  Welcome, <span className="font-medium text-slate-900 dark:text-white">{session.user.name}</span> · {org.subscriptionPlan ? `${org.subscriptionPlan.name} plan` : 'No subscription plan assigned yet'} · Role: {roleLabel}
+                  Welcome back, <span className="font-medium text-slate-900 dark:text-white">{session.user.name}</span> · {format(now, 'EEEE, d MMMM yyyy')}
+                </p>
+                <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+                  {org.subscriptionPlan ? `${org.subscriptionPlan.name} plan` : 'No subscription plan assigned yet'} · Role: {roleLabel}
                 </p>
               </div>
               <a href="/auth/signout" className="rounded-xl border border-slate-200 bg-white/70 px-3 py-2 text-sm font-medium text-rose-600 md:hidden dark:border-white/10 dark:bg-white/5 dark:text-rose-300">Sign out</a>
             </div>
+
+            {(owingTenants > 0 || vacatingLeases.length > 0 || openTickets > 0) && (
+              <section className="mb-8 rounded-2xl border border-amber-200/70 bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-rose-500/10 p-5 shadow-sm backdrop-blur-xl dark:border-amber-500/20 dark:from-amber-500/10 dark:via-orange-500/5 dark:to-rose-500/10">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/20"><AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-300" /></span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-slate-900 dark:text-white">Needs your attention</p>
+                    <p className="text-sm text-slate-600 dark:text-slate-300">
+                      {[
+                        owingTenants > 0 ? `${owingTenants} tenant${owingTenants === 1 ? '' : 's'} owing ${formatCurrency(totalOutstanding, currency)}` : null,
+                        vacatingLeases.length > 0 ? `${vacatingLeases.length} lease${vacatingLeases.length === 1 ? '' : 's'} ending soon` : null,
+                        openTickets > 0 ? `${openTickets} open maintenance issue${openTickets === 1 ? '' : 's'}` : null,
+                      ].filter(Boolean).join(' · ')}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {owingTenants > 0 && <Link href={`/maskani/invoices${orgQuery}`} className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-rose-500/25 transition hover:bg-rose-500">Review balances</Link>}
+                    {vacatingLeases.length > 0 && <Link href={`/maskani/tenants${orgQuery}`} className="rounded-xl border border-amber-300 bg-white/70 px-4 py-2 text-sm font-semibold text-amber-700 transition hover:bg-amber-50 dark:border-amber-500/30 dark:bg-white/5 dark:text-amber-300 dark:hover:bg-white/10">Check leases</Link>}
+                    {openTickets > 0 && <Link href={`/maskani/maintenance${orgQuery}`} className="rounded-xl border border-slate-300 bg-white/70 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-white/15 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10">View tickets</Link>}
+                  </div>
+                </div>
+              </section>
+            )}
 
             <section className="mb-8">
               <div className="mb-4 flex items-center justify-between">
@@ -452,7 +478,7 @@ export default async function MaskaniPage({ searchParams }: { searchParams: Prom
             </div>
 
             <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-6 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
-              <h3 className="mb-4 text-lg font-bold text-slate-900 dark:text-white">Organization summary</h3>
+              <h3 className="mb-4 flex items-center gap-2 text-lg font-bold text-slate-900 dark:text-white"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/20"><Users className="h-5 w-5 text-emerald-600 dark:text-emerald-300" /></span> Workspace overview</h3>
               <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
                 <Link href={`/maskani/tenants${orgQuery}`} className="flex items-center gap-3 rounded-xl border border-cyan-200/70 bg-cyan-500/10 p-4 transition hover:bg-cyan-500/20 dark:border-cyan-500/20 dark:bg-cyan-500/10"><FileText className="h-5 w-5 text-cyan-600 dark:text-cyan-300" /><div><p className="text-slate-500 dark:text-slate-400">Leases</p><p className="text-lg font-semibold text-slate-900 dark:text-white">{c.leases}</p></div></Link>
                 <Link href={`/maskani/invoices${orgQuery}`} className="flex items-center gap-3 rounded-xl border border-violet-200/70 bg-violet-500/10 p-4 transition hover:bg-violet-500/20 dark:border-violet-500/20 dark:bg-violet-500/10"><CreditCard className="h-5 w-5 text-violet-600 dark:text-violet-300" /><div><p className="text-slate-500 dark:text-slate-400">Invoices</p><p className="text-lg font-semibold text-slate-900 dark:text-white">{c.invoices}</p></div></Link>
