@@ -3,13 +3,14 @@ import { redirect } from 'next/navigation'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
-import { Sparkles, Home, FileText, Wrench, MessageSquareWarning } from 'lucide-react'
+import { Sparkles, Home, FileText, Wrench, MessageSquareWarning, Receipt } from 'lucide-react'
 
 export const instant = false
 
 const nav = [
   { href: '/portal', label: 'Dashboard', icon: Home },
   { href: '/portal/invoices', label: 'My Invoices', icon: FileText },
+  { href: '/portal/statement', label: 'Statement', icon: Receipt },
   { href: '/portal/maintenance', label: 'Maintenance', icon: Wrench },
   { href: '/portal/complaints', label: 'Complaints', icon: MessageSquareWarning },
 ]
