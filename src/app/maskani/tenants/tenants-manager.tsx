@@ -2,9 +2,9 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
-import { Sparkles, ArrowLeft, Users, Plus, X, Trash2, Ban, CheckCircle2, Mail, Phone, Home, Calendar, Droplets } from 'lucide-react'
+import { Sparkles, ArrowLeft, Users, Plus, X, Trash2, Ban, CheckCircle2, Mail, Phone, Home, Calendar, Droplets, ArrowRightLeft } from 'lucide-react'
 import { formatCurrency } from '@/lib/currency'
-import { createLease, updateLeaseStatus, deleteLease } from './actions'
+import { createLease, updateLeaseStatus, deleteLease, transferLease } from './actions'
 import { recordWaterReading, deleteWaterReading } from '../utilities/actions'
 import { MobileNav } from '@/components/mobile-nav'
 
@@ -20,6 +20,7 @@ export function TenantsManager({ organization, orgQuery, roleLabel, leases, unit
   const [pending, startTransition] = useTransition()
   const [msg, setMsg] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
+  const [transferFor, setTransferFor] = useState<string | null>(null)
   const inputCls = 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20 dark:border-white/10 dark:bg-slate-900/60 dark:text-white'
 
   const flash = (m: string) => { setMsg(m); setTimeout(() => setMsg(null), 2500) }
@@ -115,9 +116,22 @@ export function TenantsManager({ organization, orgQuery, roleLabel, leases, unit
                         </div>
                         <div className="flex items-center gap-2">
                           <span className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${l.status === 'active' ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'bg-slate-500/15 text-slate-700 dark:text-slate-300'}`}>{l.status}</span>
+                          {l.status === 'active' && (
+                            <button onClick={() => setTransferFor(transferFor === l.id ? null : l.id)} className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium ${transferFor === l.id ? 'border-sky-300 bg-sky-50 text-sky-700 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-300' : 'border-slate-200 hover:bg-slate-100 dark:border-white/10 dark:hover:bg-white/10'}`}><ArrowRightLeft className="h-3.5 w-3.5" />Transfer</button>
+                          )}
                           <button onClick={() => { const fd = new FormData(); fd.set('orgId', organization.id); fd.set('id', l.id); fd.set('status', l.status === 'active' ? 'terminated' : 'active'); run(() => updateLeaseStatus(fd), 'Lease updated') }} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium hover:bg-slate-100 dark:border-white/10 dark:hover:bg-white/10">{l.status === 'active' ? <><Ban className="h-3.5 w-3.5" />Terminate</> : <><CheckCircle2 className="h-3.5 w-3.5" />Activate</>}</button>
                           <button onClick={() => { if (confirm('Delete this lease?')) { const fd = new FormData(); fd.set('orgId', organization.id); fd.set('id', l.id); run(() => deleteLease(fd), 'Lease deleted') } }} className="rounded-lg border border-rose-200 p-1.5 text-rose-600 hover:bg-rose-50 dark:border-rose-500/30 dark:text-rose-300 dark:hover:bg-rose-500/10"><Trash2 className="h-4 w-4" /></button>
                         </div>
+                        {transferFor === l.id && l.status === 'active' && (
+                          <form action={(fd) => { fd.set('orgId', organization.id); fd.set('leaseId', l.id); run(() => transferLease(fd), `Transferred to new unit`, () => setTransferFor(null)) }} className="mt-3 flex w-full flex-wrap items-end gap-2 rounded-xl border border-sky-200/70 bg-sky-500/5 p-3 dark:border-sky-500/20">
+                            <div className="min-w-40 flex-1"><label className="mb-1 block text-xs font-medium">Move to unit</label><select name="newUnitId" required className={inputCls}><option value="">Select vacant unit</option>{units.filter((u) => u.available !== false && u.id !== l.unitId).map((u) => <option key={u.id} value={u.id}>{u.label}</option>)}</select></div>
+                            <div><label className="mb-1 block text-xs font-medium">Transfer date</label><input name="transferDate" type="date" required defaultValue={new Date().toISOString().slice(0, 10)} className={inputCls} /></div>
+                            <div><label className="mb-1 block text-xs font-medium">New lease end</label><input name="newEndDate" type="date" required className={inputCls} /></div>
+                            <div className="w-24"><label className="mb-1 block text-xs font-medium">Bill day</label><input name="billingDayOfMonth" type="number" min={1} max={28} defaultValue={l.billingDayOfMonth} className={inputCls} /></div>
+                            <button type="submit" disabled={pending} className="rounded-lg bg-sky-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-60">{pending ? 'Moving…' : 'Confirm move'}</button>
+                            <p className="w-full text-[11px] text-slate-500 dark:text-slate-400">The old lease is terminated on the transfer date and a new lease starts on the chosen unit — invoice and water history stays with the old unit. Any unpaid balance remains on the tenant&apos;s account.</p>
+                          </form>
+                        )}
                       </div>
                     ))}
                   </div>

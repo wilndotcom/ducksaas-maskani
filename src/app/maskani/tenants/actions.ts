@@ -102,6 +102,79 @@ export async function createLease(formData: FormData) {
   revalidatePath('/maskani/properties')
 }
 
+/**
+ * Transfers a tenant from their current unit to another unit (same or
+ * different property) atomically: terminates the old lease, creates a new
+ * active lease on the target unit, moves the member's unit pointer, and
+ * updates both units' occupancy. Invoice and water-reading history stays
+ * attached to the old lease/unit.
+ */
+export async function transferLease(formData: FormData) {
+  const orgId = await resolveOrgId(String(formData.get('orgId') || ''))
+  await requireMaskaniPermission('manage_tenants_leases', orgId)
+  const leaseId = String(formData.get('leaseId') || '')
+  const newUnitId = String(formData.get('newUnitId') || '')
+  const transferDateStr = String(formData.get('transferDate') || '')
+  const newEndDateStr = String(formData.get('newEndDate') || '')
+  const billingDayRaw = String(formData.get('billingDayOfMonth') || '').trim()
+
+  if (!leaseId || !newUnitId || !transferDateStr || !newEndDateStr) throw new Error('Lease, new unit, transfer date, and new end date are required')
+
+  const lease = await prisma.lease.findFirst({
+    where: { id: leaseId, organizationId: orgId },
+    select: {
+      id: true, unitId: true, tenantUserId: true, status: true, billingDayOfMonth: true,
+      unit: { select: { unitNumber: true, property: { select: { name: true } } } },
+    },
+  })
+  if (!lease) throw new Error('Lease not found')
+  if (lease.status !== 'active') throw new Error('Only active leases can be transferred')
+  if (lease.unitId === newUnitId) throw new Error('Tenant is already on this unit')
+
+  const billingDayOfMonth = billingDayRaw ? Number(billingDayRaw) : lease.billingDayOfMonth
+  if (!Number.isInteger(billingDayOfMonth) || billingDayOfMonth < 1 || billingDayOfMonth > 28) throw new Error('Billing day must be between 1 and 28')
+
+  const transferDate = new Date(transferDateStr)
+  const newEnd = new Date(newEndDateStr)
+  if (isNaN(transferDate.getTime()) || isNaN(newEnd.getTime()) || newEnd <= transferDate) throw new Error('Provide valid dates (end must be after transfer date)')
+
+  const newUnit = await prisma.unit.findFirst({
+    where: { id: newUnitId, organizationId: orgId },
+    select: { id: true, status: true, _count: { select: { leases: { where: { status: 'active' } } } } },
+  })
+  if (!newUnit) throw new Error('Target unit not found in this organization')
+  if (newUnit._count.leases > 0) throw new Error('Target unit already has an active lease')
+  if (newUnit.status !== 'vacant') throw new Error('Target unit is not vacant')
+
+  await prisma.$transaction(async (tx) => {
+    await tx.lease.update({ where: { id: lease.id }, data: { status: 'terminated', endDate: transferDate } })
+    await tx.lease.create({
+      data: {
+        organizationId: orgId,
+        unitId: newUnitId,
+        tenantUserId: lease.tenantUserId,
+        startDate: transferDate,
+        endDate: newEnd,
+        billingDayOfMonth,
+        status: 'active',
+      },
+    })
+    await tx.organizationMember.upsert({
+      where: { organizationId_userId: { organizationId: orgId, userId: lease.tenantUserId } },
+      update: { unitId: newUnitId },
+      create: { organizationId: orgId, userId: lease.tenantUserId, role: 'tenant', unitId: newUnitId },
+    })
+    const otherActive = await tx.lease.count({ where: { unitId: lease.unitId, status: 'active' } })
+    if (otherActive === 0) await tx.unit.update({ where: { id: lease.unitId }, data: { status: 'vacant' } })
+    await tx.unit.update({ where: { id: newUnitId }, data: { status: 'occupied' } })
+  })
+
+  revalidatePath('/maskani')
+  revalidatePath('/maskani/tenants')
+  revalidatePath('/maskani/properties')
+  revalidatePath('/portal')
+}
+
 export async function updateLeaseStatus(formData: FormData) {
   const orgId = await resolveOrgId(String(formData.get('orgId') || ''))
   await requireMaskaniPermission('manage_tenants_leases', orgId)
