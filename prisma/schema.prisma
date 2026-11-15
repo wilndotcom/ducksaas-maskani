@@ -1,0 +1,432 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum GlobalRole {
+  super_admin
+  standard
+}
+
+enum OrganizationStatus {
+  active
+  grace_period
+  suspended_readonly
+}
+
+enum OrganizationMemberRole {
+  landlord_admin
+  caretaker
+  tenant
+}
+
+enum PropertyType {
+  Apartment
+  Court
+  Commercial
+}
+
+enum UnitStatus {
+  vacant
+  occupied
+  maintenance
+}
+
+enum LeaseStatus {
+  active
+  terminated
+}
+
+enum InvoiceStatus {
+  unpaid
+  partial
+  paid
+  overdue
+}
+
+enum PaymentMethod {
+  mpesa_stk
+  mpesa_c2b
+  card
+  cash_manual
+ bank_transfer
+}
+
+enum PaymentGatewayProvider {
+  mpesa_paybill
+  mpesa_till
+  paystack_subaccount
+  bank_transfer
+}
+
+enum MaintenanceCategory {
+  plumbing
+  electrical
+  structural
+  other
+}
+
+enum MaintenancePriority {
+  low
+  medium
+  high
+}
+
+enum MaintenanceStatus {
+  open
+  in_progress
+  resolved
+}
+
+enum SubscriptionStatus {
+  active
+  expired
+  cancelled
+}
+
+enum ComplaintStatus {
+  open
+  in_progress
+  resolved
+  closed
+}
+
+enum ComplaintPriority {
+  low
+  medium
+  high
+}
+
+// ============================================
+// CORE TABLES
+// ============================================
+
+model User {
+  id                String    @id @default(cuid())
+  name              String
+  email             String    @unique
+  phone             String?
+  passwordHash      String    @map("password_hash")
+  globalRole        GlobalRole @default(standard) @map("global_role")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  ownedOrganizations Organization[] @relation("OrganizationOwner")
+  organizationMembers OrganizationMember[]
+  leases             Lease[] @relation("TenantLeases")
+  invoices           Invoice[] @relation("TenantInvoices")
+  rentPayments       RentPayment[] @relation("TenantPayments")
+  maintenanceTickets MaintenanceTicket[] @relation("TenantTickets")
+  complaints         Complaint[] @relation("TenantComplaints")
+
+  @@map("users")
+}
+
+model Organization {
+  id                   String             @id @default(cuid())
+  name                 String
+  ownerUserId          String             @map("owner_user_id")
+  slug                 String             @unique
+  status               OrganizationStatus @default(active)
+  subscriptionPlanId   String?            @map("subscription_plan_id")
+  subscriptionEndsAt   DateTime?          @map("subscription_ends_at")
+  settings             Json?              @default("{}") @map("settings")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  // Relations
+  owner                User               @relation("OrganizationOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  subscriptionPlan     SubscriptionPlan?   @relation("OrganizationSubscription", fields: [subscriptionPlanId], references: [id])
+  members              OrganizationMember[]
+  paymentGateways      LandlordPaymentGateway[]
+  properties           Property[]
+  saasSubscriptions    SaaSSubscriptionLedger[]
+  units                Unit[]
+  leases               Lease[]
+  invoices             Invoice[]
+  rentPayments         RentPayment[]
+  maintenanceTickets   MaintenanceTicket[]
+  complaints           Complaint[]
+
+  @@index([ownerUserId])
+  @@index([slug])
+  @@index([subscriptionPlanId])
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id             String               @id @default(cuid())
+  organizationId String               @map("organization_id")
+  userId         String               @map("user_id")
+  role           OrganizationMemberRole
+  unitId         String?              @map("unit_id")
+  permissions    Json?                @map("permissions")
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+
+  // Relations
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  unit           Unit?                @relation("MemberUnit", fields: [unitId], references: [id])
+
+  @@unique([organizationId, userId])
+  @@index([organizationId])
+  @@index([userId])
+  @@index([unitId])
+  @@map("organization_members")
+}
+
+model SubscriptionPlan {
+  id                        String   @id @default(cuid())
+  name                      String
+  pricingModel              String   @default("flat") @map("pricing_model") // flat | per_property
+  priceMonthly              Float    @map("price_monthly") // flat: monthly price; per_property: base monthly
+  priceYearly               Float    @map("price_yearly")  // flat: yearly price; per_property: base yearly
+  pricePerPropertyMonthly   Float    @default(0) @map("price_per_property_monthly")
+  pricePerPropertyYearly    Float    @default(0) @map("price_per_property_yearly")
+  includedProperties        Int      @default(0) @map("included_properties")
+  currency                  String   @default("USD")
+  maxUnits                  Int      @default(10) @map("max_units")
+  featureFlags              Json     @default("{}") @map("feature_flags")
+  isActive                  Boolean  @default(true) @map("is_active")
+  createdAt                 DateTime @default(now()) @map("created_at")
+  updatedAt                 DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  organizations     Organization[] @relation("OrganizationSubscription")
+  saasSubscriptions SaaSSubscriptionLedger[]
+
+  @@index([isActive])
+  @@index([pricingModel])
+  @@map("subscription_plans")
+}
+
+model SaaSSubscriptionLedger {
+  id              String             @id @default(cuid())
+  organizationId  String             @map("organization_id")
+  planId          String             @map("plan_id")
+  amount          Float
+  gateway         String
+  transactionRef  String             @map("transaction_ref")
+  status          SubscriptionStatus @default(active)
+  periodStart     DateTime           @map("period_start")
+  periodEnd       DateTime           @map("period_end")
+  createdAt       DateTime           @default(now()) @map("created_at")
+
+  // Relations
+  organization    Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan            SubscriptionPlan  @relation(fields: [planId], references: [id])
+
+  @@index([organizationId])
+  @@index([planId])
+  @@index([status])
+  @@map("saas_subscriptions_ledger")
+}
+
+model LandlordPaymentGateway {
+  id                    String                  @id @default(cuid())
+  organizationId        String                  @map("organization_id")
+  provider              PaymentGatewayProvider
+  accountNumber         String                  @map("account_number")
+  apiCredentialsEncrypted Json                  @map("api_credentials_encrypted")
+  isActive              Boolean                 @default(true) @map("is_active")
+  createdAt             DateTime                @default(now()) @map("created_at")
+  updatedAt             DateTime                @updatedAt @map("updated_at")
+
+  // Relations
+  organization          Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([provider])
+  @@map("landlord_payment_gateways")
+}
+
+model Property {
+  id            String       @id @default(cuid())
+  organizationId String       @map("organization_id")
+  name          String
+  location      String
+  type          PropertyType
+  totalUnits    Int          @map("total_units")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  // Relations
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  units          Unit[]
+
+  @@index([organizationId])
+  @@index([type])
+  @@map("properties")
+}
+
+model Unit {
+  id            String     @id @default(cuid())
+  organizationId String     @map("organization_id")
+  propertyId    String     @map("property_id")
+  unitNumber    String     @map("unit_number")
+  floor         Int?
+  monthlyRent   Float      @map("monthly_rent")
+  depositAmount Float      @map("deposit_amount")
+  status        UnitStatus @default(vacant)
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+
+  // Relations
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property       Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  leases         Lease[]
+  members        OrganizationMember[] @relation("MemberUnit")
+  invoices       Invoice[]
+  maintenanceTickets MaintenanceTicket[]
+  complaints         Complaint[]
+
+  @@unique([propertyId, unitNumber])
+  @@index([organizationId])
+  @@index([propertyId])
+  @@index([status])
+  @@map("units")
+}
+
+model Lease {
+  id                String      @id @default(cuid())
+  organizationId    String      @map("organization_id")
+  unitId            String      @map("unit_id")
+  tenantUserId      String      @map("tenant_user_id")
+  startDate         DateTime    @map("start_date")
+  endDate           DateTime    @map("end_date")
+  billingDayOfMonth Int         @map("billing_day_of_month")
+  status            LeaseStatus @default(active)
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
+
+  // Relations
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  unit              Unit         @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  tenant            User         @relation("TenantLeases", fields: [tenantUserId], references: [id], onDelete: Cascade)
+  invoices          Invoice[]
+
+  @@index([organizationId])
+  @@index([unitId])
+  @@index([tenantUserId])
+  @@index([status])
+  @@map("leases")
+}
+
+model Invoice {
+  id                String        @id @default(cuid())
+  organizationId    String        @map("organization_id")
+  leaseId           String        @map("lease_id")
+  unitId            String        @map("unit_id")
+  tenantUserId      String        @map("tenant_user_id")
+  invoiceNumber     String        @map("invoice_number")
+  billingMonth      String        @map("billing_month")
+  amountDue         Float         @map("amount_due")
+  amountPaid        Float         @default(0) @map("amount_paid")
+  dueDate           DateTime      @map("due_date")
+  status            InvoiceStatus @default(unpaid)
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  organization      Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lease             Lease         @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+  unit              Unit          @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  tenant            User          @relation("TenantInvoices", fields: [tenantUserId], references: [id], onDelete: Cascade)
+  payments          RentPayment[]
+
+  @@unique([invoiceNumber])
+  @@index([organizationId])
+  @@index([leaseId])
+  @@index([tenantUserId])
+  @@index([status])
+  @@index([dueDate])
+  @@map("invoices")
+}
+
+model RentPayment {
+  id               String        @id @default(cuid())
+  organizationId   String        @map("organization_id")
+  invoiceId        String        @map("invoice_id")
+  tenantUserId     String        @map("tenant_user_id")
+  amount           Float
+  paymentMethod    PaymentMethod @map("payment_method")
+  gatewayReference String?       @map("gateway_reference")
+  paidAt           DateTime      @map("paid_at")
+  createdAt        DateTime      @default(now()) @map("created_at")
+
+  // Relations
+  organization     Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoice          Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  tenant           User          @relation("TenantPayments", fields: [tenantUserId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([invoiceId])
+  @@index([tenantUserId])
+  @@index([paidAt])
+  @@map("rent_payments")
+}
+
+model MaintenanceTicket {
+  id                String              @id @default(cuid())
+  organizationId    String              @map("organization_id")
+  unitId            String              @map("unit_id")
+  tenantUserId      String              @map("tenant_user_id")
+  category          MaintenanceCategory
+  title             String
+  description       String?
+  photoUrls         Json?               @map("photo_urls")
+  priority          MaintenancePriority @default(medium)
+  status            MaintenanceStatus   @default(open)
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+
+  // Relations
+  organization      Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  unit              Unit                @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  tenant            User                @relation("TenantTickets", fields: [tenantUserId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([unitId])
+  @@index([tenantUserId])
+  @@index([status])
+  @@index([priority])
+  @@map("maintenance_tickets")
+}
+
+model Complaint {
+  id             String            @id @default(cuid())
+  organizationId String            @map("organization_id")
+  tenantUserId   String?           @map("tenant_user_id")
+  unitId         String?           @map("unit_id")
+  subject        String
+  description    String
+  status         ComplaintStatus   @default(open)
+  priority       ComplaintPriority @default(medium)
+  resolutionNote String?           @map("resolution_note")
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tenant         User?        @relation("TenantComplaints", fields: [tenantUserId], references: [id], onDelete: SetNull)
+  unit           Unit?        @relation(fields: [unitId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([tenantUserId])
+  @@index([unitId])
+  @@index([status])
+  @@index([priority])
+  @@map("complaints")
+}
