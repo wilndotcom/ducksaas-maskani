@@ -53,6 +53,7 @@ export default async function TenantsPage({ searchParams }: { searchParams: Prom
       leases={leases.map((l) => ({
         id: l.id,
         unitId: l.unitId,
+        tenantUserId: l.tenantUserId,
         tenantName: l.tenant.name,
         tenantEmail: l.tenant.email,
         tenantPhone: l.tenant.phone,

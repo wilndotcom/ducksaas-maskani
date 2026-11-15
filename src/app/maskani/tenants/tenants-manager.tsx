@@ -8,7 +8,7 @@ import { createLease, updateLeaseStatus, deleteLease } from './actions'
 import { recordWaterReading, deleteWaterReading } from '../utilities/actions'
 import { MobileNav } from '@/components/mobile-nav'
 
-type Lease = { id: string; unitId: string; tenantName: string; tenantEmail: string; tenantPhone: string | null; unitLabel: string; startDate: string; endDate: string; billingDayOfMonth: number; status: 'active' | 'terminated' }
+type Lease = { id: string; unitId: string; tenantUserId: string; tenantName: string; tenantEmail: string; tenantPhone: string | null; unitLabel: string; startDate: string; endDate: string; billingDayOfMonth: number; status: 'active' | 'terminated' }
 type UnitOpt = { id: string; label: string }
 type Tenant = { id: string; name: string; email: string; phone: string | null }
 type WaterUnit = { id: string; label: string; rate: number }
@@ -109,7 +109,7 @@ export function TenantsManager({ organization, orgQuery, roleLabel, leases, unit
                     {leases.map((l) => (
                       <div key={l.id} className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200/70 bg-white/60 p-4 dark:border-white/10 dark:bg-slate-900/40">
                         <div className="min-w-0">
-                          <p className="font-semibold text-slate-900 dark:text-white">{l.tenantName}</p>
+                          <Link href={`/maskani/tenants/${l.tenantUserId}${orgQuery}`} className="font-semibold text-slate-900 hover:text-emerald-600 hover:underline dark:text-white dark:hover:text-emerald-300">{l.tenantName}</Link>
                           <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400"><span className="inline-flex items-center gap-1"><Mail className="h-3.5 w-3.5" />{l.tenantEmail}</span>{l.tenantPhone && <span className="inline-flex items-center gap-1"><Phone className="h-3.5 w-3.5" />{l.tenantPhone}</span>}</p>
                           <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400"><span className="inline-flex items-center gap-1"><Home className="h-3.5 w-3.5" />{l.unitLabel}</span><span className="inline-flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />{l.startDate} → {l.endDate}</span><span>Bill day: {l.billingDayOfMonth}</span></p>
                         </div>
@@ -126,7 +126,7 @@ export function TenantsManager({ organization, orgQuery, roleLabel, leases, unit
               <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-6 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
                 <h3 className="mb-4 text-lg font-semibold">Tenant Members</h3>
                 {tenants.length === 0 ? <p className="text-sm text-slate-500 dark:text-slate-400">No tenant members yet. Tenants are added to this organization when you create a lease for their account.</p> : (
-                  <div className="space-y-3">{tenants.map((t) => (<div key={t.id} className="rounded-xl border border-slate-200/70 bg-white/60 p-3 dark:border-white/10 dark:bg-slate-900/40"><p className="font-medium">{t.name}</p><p className="text-xs text-slate-500 dark:text-slate-400">{t.email}</p>{t.phone && <p className="text-xs text-slate-500 dark:text-slate-400">{t.phone}</p>}</div>))}</div>
+                  <div className="space-y-3">{tenants.map((t) => (<div key={t.id} className="rounded-xl border border-slate-200/70 bg-white/60 p-3 dark:border-white/10 dark:bg-slate-900/40"><Link href={`/maskani/tenants/${t.id}${orgQuery}`} className="font-medium hover:text-emerald-600 hover:underline dark:hover:text-emerald-300">{t.name}</Link><p className="text-xs text-slate-500 dark:text-slate-400">{t.email}</p>{t.phone && <p className="text-xs text-slate-500 dark:text-slate-400">{t.phone}</p>}</div>))}</div>
                 )}
                 <div className="mt-4 rounded-xl border border-cyan-200/60 bg-cyan-500/10 p-3 text-xs text-cyan-800 dark:border-cyan-500/20 dark:text-cyan-200">To add a tenant, enter their email. If they don&apos;t have an account yet, also provide their name and a password — a tenant portal account will be created automatically.</div>
               </div>
