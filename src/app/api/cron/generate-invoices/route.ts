@@ -112,12 +112,20 @@ export async function GET(req: Request) {
       const dueDate = new Date(year, month, lease.billingDayOfMonth)
       dueDate.setDate(dueDate.getDate() + graceDays)
 
-      // Roll any unbilled water reading for this unit+month into the invoice
-      const waterReading = await prisma.waterReading.findFirst({
-        where: { unitId: lease.unitId, periodMonth: billingMonth, invoiceId: null },
+      // Roll unbilled water readings for this unit+month into the invoice.
+      // Readings stamped to this lease (or legacy unstamped ones) belong to
+      // this tenant; readings stamped to other leases are billed separately.
+      const waterReadings = await prisma.waterReading.findMany({
+        where: {
+          unitId: lease.unitId,
+          periodMonth: billingMonth,
+          invoiceId: null,
+          OR: [{ leaseId: lease.id }, { leaseId: null }],
+        },
+        select: { id: true, amount: true },
       })
       const rentAmount = lease.unit.monthlyRent
-      const waterAmount = waterReading ? waterReading.amount : 0
+      const waterAmount = waterReadings.reduce((sum, r) => sum + r.amount, 0)
       const amountDue = rentAmount + waterAmount
       if (!Number.isFinite(amountDue) || amountDue <= 0) {
         skipped++
@@ -142,8 +150,11 @@ export async function GET(req: Request) {
           status,
         },
       })
-      if (waterReading) {
-        await prisma.waterReading.update({ where: { id: waterReading.id }, data: { invoiceId: invoice.id } })
+      if (waterReadings.length > 0) {
+        await prisma.waterReading.updateMany({
+          where: { id: { in: waterReadings.map((r) => r.id) } },
+          data: { invoiceId: invoice.id },
+        })
       }
       created++
 
@@ -160,6 +171,79 @@ export async function GET(req: Request) {
       }
     } catch (e) {
       errors.push(`${lease.id}: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
+
+  // Bill unbilled water readings stamped to leases that received no monthly
+  // invoice this run (e.g. terminated leases). The water charge follows the
+  // tenant who actually consumed it — a departed tenant gets their own
+  // water-only invoice instead of the new tenant inheriting it.
+  const orphanReadings = await prisma.waterReading.findMany({
+    where: { periodMonth: billingMonth, invoiceId: null, lease: { status: 'terminated' } },
+    include: {
+      lease: {
+        select: {
+          id: true, billingDayOfMonth: true, tenantUserId: true, organizationId: true,
+          tenant: { select: { name: true, email: true } },
+          organization: { select: { name: true, settings: true, status: true } },
+        },
+      },
+    },
+  })
+  for (const reading of orphanReadings) {
+    try {
+      const l = reading.lease
+      if (!l || l.organization.status === 'suspended_readonly') continue
+      const s = (l.organization.settings as Record<string, unknown>) || {}
+      const prefix = String(s.invoice_prefix || 'INV').replace(/[^A-Za-z0-9-]/g, '').slice(0, 10) || 'INV'
+      const graceDays = Number.isFinite(Number(s.payment_grace_days)) ? Math.max(0, Math.min(60, Number(s.payment_grace_days))) : 0
+      const dueDate = new Date(year, month, l.billingDayOfMonth)
+      dueDate.setDate(dueDate.getDate() + graceDays)
+
+      const existing = await prisma.invoice.findFirst({
+        where: { leaseId: l.id, billingMonth },
+        select: { id: true, amountDue: true, amountPaid: true, waterAmount: true, dueDate: true },
+      })
+      if (existing) {
+        const newDue = existing.amountDue + reading.amount
+        const newPaid = existing.amountPaid
+        const status = newPaid >= newDue - 0.01 ? 'paid' : existing.dueDate < now ? 'overdue' : newPaid > 0 ? 'partial' : 'unpaid'
+        await prisma.$transaction([
+          prisma.invoice.update({ where: { id: existing.id }, data: { amountDue: newDue, waterAmount: existing.waterAmount + reading.amount, status } }),
+          prisma.waterReading.update({ where: { id: reading.id }, data: { invoiceId: existing.id } }),
+        ])
+      } else {
+        const invoice = await prisma.invoice.create({
+          data: {
+            organizationId: l.organizationId,
+            leaseId: l.id,
+            unitId: reading.unitId,
+            tenantUserId: l.tenantUserId,
+            invoiceNumber: `${prefix}-${billingMonth}-${l.id.slice(-6).toUpperCase()}`,
+            billingMonth,
+            amountDue: reading.amount,
+            amountPaid: 0,
+            waterAmount: reading.amount,
+            dueDate,
+            status: dueDate < now ? 'overdue' : 'unpaid',
+          },
+        })
+        await prisma.waterReading.update({ where: { id: reading.id }, data: { invoiceId: invoice.id } })
+        if (l.tenant.email) {
+          sendInvoiceEmail({
+            to: l.tenant.email,
+            name: l.tenant.name,
+            orgName: l.organization.name,
+            invoiceNumber: invoice.invoiceNumber,
+            amount: reading.amount,
+            currency: String(s.currency || 'KES'),
+            dueDate: dueDate.toLocaleDateString(),
+          }).catch(() => {})
+        }
+      }
+      created++
+    } catch (e) {
+      errors.push(`water:${reading.id}: ${e instanceof Error ? e.message : String(e)}`)
     }
   }
 

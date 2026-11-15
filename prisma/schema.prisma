@@ -323,6 +323,7 @@ model Lease {
   unit              Unit         @relation(fields: [unitId], references: [id], onDelete: Cascade)
   tenant            User         @relation("TenantLeases", fields: [tenantUserId], references: [id], onDelete: Cascade)
   invoices          Invoice[]
+  waterReadings     WaterReading[]
 
   @@index([organizationId])
   @@index([unitId])
@@ -453,6 +454,7 @@ model WaterReading {
   id               String   @id @default(cuid())
   organizationId   String   @map("organization_id")
   unitId           String   @map("unit_id")
+  leaseId          String?  @map("lease_id")
   periodMonth      String   @map("period_month") // YYYY-MM
   meterReading     Float    @map("meter_reading")
   previousReading  Float?   @map("previous_reading")
@@ -464,11 +466,13 @@ model WaterReading {
 
   organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   unit             Unit         @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  lease            Lease?       @relation(fields: [leaseId], references: [id], onDelete: SetNull)
   invoice          Invoice?     @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
 
-  @@unique([unitId, periodMonth])
+  @@unique([unitId, periodMonth, leaseId])
   @@index([organizationId])
   @@index([unitId])
+  @@index([leaseId])
   @@index([invoiceId])
   @@map("water_readings")
 }

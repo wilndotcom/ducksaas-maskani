@@ -34,12 +34,19 @@ export default async function TenantsPage({ searchParams }: { searchParams: Prom
       where: { organizationId: org.id },
       orderBy: { periodMonth: 'desc' },
       take: 200,
-      select: { id: true, unitId: true, periodMonth: true, meterReading: true, unitsConsumed: true, ratePerUnit: true, amount: true, invoiceId: true },
+      select: { id: true, unitId: true, periodMonth: true, meterReading: true, unitsConsumed: true, ratePerUnit: true, amount: true, invoiceId: true, lease: { select: { tenantUserId: true } } },
     }),
   ])
 
-  // Units that can be billed for water: occupied units on active leases
-  const billableUnitIds = new Set(leases.filter((l) => l.status === 'active').map((l) => l.unitId))
+  // Units that can be billed for water: occupied units, plus units whose
+  // lease ended recently (so a closing reading can still be recorded for
+  // the departing tenant).
+  const latestLeaseDate = leases.reduce((max, l) => (l.endDate > max ? l.endDate : max), leases[0]?.endDate ?? new Date(0))
+  const vacancyCutoff = new Date(latestLeaseDate.getTime() - 120 * 24 * 60 * 60 * 1000)
+  const billableUnitIds = new Set(
+    leases.filter((l) => l.status === 'active' || l.endDate >= vacancyCutoff).map((l) => l.unitId),
+  )
+  const tenantNameById = new Map(tenants.map((t) => [t.user.id, t.user.name]))
   const waterUnits = units
     .filter((u) => billableUnitIds.has(u.id))
     .map((u) => ({ id: u.id, label: `${u.property.name} - ${u.unitNumber}`, rate: u.waterRatePerUnit }))
@@ -66,7 +73,7 @@ export default async function TenantsPage({ searchParams }: { searchParams: Prom
       units={units.map((u) => ({ id: u.id, label: `${u.property.name} - ${u.unitNumber}${u.status === 'vacant' ? '' : ` (${u.status})`}`, available: u.status === 'vacant' }))}
       tenants={tenants.map((t) => ({ id: t.user.id, name: t.user.name, email: t.user.email, phone: t.user.phone }))}
       waterUnits={waterUnits}
-      waterReadings={waterReadings.map((r) => ({ id: r.id, unitId: r.unitId, periodMonth: r.periodMonth, meterReading: r.meterReading, unitsConsumed: r.unitsConsumed, ratePerUnit: r.ratePerUnit, amount: r.amount, billed: r.invoiceId !== null }))}
+      waterReadings={waterReadings.map((r) => ({ id: r.id, unitId: r.unitId, periodMonth: r.periodMonth, meterReading: r.meterReading, unitsConsumed: r.unitsConsumed, ratePerUnit: r.ratePerUnit, amount: r.amount, billed: r.invoiceId !== null, leaseTenantName: r.lease ? tenantNameById.get(r.lease.tenantUserId) ?? null : null }))}
     />
   )
 }

@@ -12,7 +12,7 @@ type Lease = { id: string; unitId: string; tenantUserId: string; tenantName: str
 type UnitOpt = { id: string; label: string; available?: boolean }
 type Tenant = { id: string; name: string; email: string; phone: string | null }
 type WaterUnit = { id: string; label: string; rate: number }
-type WaterReading = { id: string; unitId: string; periodMonth: string; meterReading: number; unitsConsumed: number; ratePerUnit: number; amount: number; billed: boolean }
+type WaterReading = { id: string; unitId: string; periodMonth: string; meterReading: number; unitsConsumed: number; ratePerUnit: number; amount: number; billed: boolean; leaseTenantName?: string | null }
 
 const currentMonth = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` }
 
@@ -136,17 +136,19 @@ export function TenantsManager({ organization, orgQuery, roleLabel, leases, unit
               <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h3 className="flex items-center gap-2 text-lg font-semibold"><Droplets className="h-5 w-5 text-cyan-500" /> Water Billing</h3>
-                  <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">Record monthly meter readings for occupied units. Readings are rolled into the unit&apos;s rent invoice on the billing day. Set each unit&apos;s water rate (price per unit consumed) in Properties &amp; Units.</p>
+                  <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">Record monthly meter readings. Each reading is attributed to a tenant&apos;s lease, so a new tenant never inherits the previous tenant&apos;s water usage. Readings roll into that tenant&apos;s invoice on the billing day. Set each unit&apos;s water rate in Properties &amp; Units.</p>
                 </div>
                 {unbilledTotal > 0 && <span className="rounded-full bg-amber-500/15 px-3 py-1 text-xs font-medium text-amber-700 dark:text-amber-300">Unbilled water charges: {formatCurrency(unbilledTotal, currency)}</span>}
               </div>
               {waterUnits.length === 0 ? (
-                <p className="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50/70 p-6 text-center text-sm text-slate-600 dark:border-white/15 dark:bg-slate-900/30 dark:text-slate-300">No occupied units to bill for water. Create an active lease first.</p>
+                <p className="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50/70 p-6 text-center text-sm text-slate-600 dark:border-white/15 dark:bg-slate-900/30 dark:text-slate-300">No units with leases to bill for water. Create a lease first.</p>
               ) : (
                 <div className="mt-4 grid gap-4 lg:grid-cols-2">
                   {waterUnits.map((u) => {
                     const latest = latestReadingByUnit.get(u.id)
                     const readings = waterReadings.filter((r) => r.unitId === u.id).slice(0, 6)
+                    const unitLeases = leases.filter((l) => l.unitId === u.id)
+                    const defaultLease = unitLeases.find((l) => l.status === 'active') || unitLeases[0]
                     return (
                       <div key={u.id} className="rounded-xl border border-slate-200/70 bg-white/60 p-4 dark:border-white/10 dark:bg-slate-900/40">
                         <div className="flex items-start justify-between gap-3">
@@ -162,6 +164,9 @@ export function TenantsManager({ organization, orgQuery, roleLabel, leases, unit
                           </p>
                         )}
                         <form action={(fd) => { fd.set('orgId', organization.id); fd.set('unitId', u.id); run(() => recordWaterReading(fd), 'Reading recorded') }} className="mt-3 flex flex-wrap items-end gap-2">
+                          {unitLeases.length > 0 && (
+                            <div className="min-w-36 flex-1"><label className="mb-1 block text-xs font-medium">Billed to</label><select name="leaseId" defaultValue={defaultLease?.id} className={inputCls}>{unitLeases.map((l) => <option key={l.id} value={l.id}>{l.tenantName} ({l.status === 'active' ? 'current' : 'previous'})</option>)}</select></div>
+                          )}
                           <div><label className="mb-1 block text-xs font-medium">Period</label><input name="periodMonth" type="month" required defaultValue={currentMonth()} className={`${inputCls} w-36`} /></div>
                           <div className="flex-1"><label className="mb-1 block text-xs font-medium">Meter reading</label><input name="meterReading" type="number" min={0} step="0.01" required className={inputCls} placeholder="e.g. 123.4" /></div>
                           <button type="submit" disabled={pending} className="rounded-lg bg-cyan-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60">{pending ? 'Saving…' : latest ? 'Update' : 'Record'}</button>
@@ -170,7 +175,7 @@ export function TenantsManager({ organization, orgQuery, roleLabel, leases, unit
                           <div className="mt-3 space-y-1 border-t border-slate-200/70 pt-2 dark:border-white/10">
                             {readings.map((r) => (
                               <div key={r.id} className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-                                <span>{r.periodMonth} · {r.unitsConsumed} units · {formatCurrency(r.amount, currency)}{r.billed ? ' · billed' : ''}</span>
+                                <span>{r.periodMonth}{r.leaseTenantName ? ` · ${r.leaseTenantName}` : ''} · {r.unitsConsumed} units · {formatCurrency(r.amount, currency)}{r.billed ? ' · billed' : ''}</span>
                                 {!r.billed && <button onClick={() => { const fd = new FormData(); fd.set('orgId', organization.id); fd.set('id', r.id); run(() => deleteWaterReading(fd), 'Reading deleted') }} className="text-rose-500 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>}
                               </div>
                             ))}
