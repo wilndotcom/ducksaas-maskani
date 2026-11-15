@@ -322,10 +322,10 @@ export default async function MaskaniPage({ searchParams }: { searchParams: Prom
             </div>
 
             <div className="mb-8 grid grid-cols-1 gap-6 xl:grid-cols-2">
-              <section className="rounded-2xl border border-slate-200/80 bg-white/70 p-6 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
+              <section className="rounded-2xl border border-rose-200/70 bg-gradient-to-br from-rose-500/10 via-white/70 to-white/70 p-6 shadow-sm backdrop-blur-xl dark:border-rose-500/20 dark:from-rose-500/10 dark:via-slate-900/60 dark:to-slate-900/60">
                 <div className="mb-4 flex items-center justify-between">
                   <div>
-                    <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-900 dark:text-white"><AlertCircle className="h-5 w-5 text-rose-500" /> Unpaid &amp; Outstanding Balances</h3>
+                    <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-900 dark:text-white"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-500/15"><AlertCircle className="h-5 w-5 text-rose-500" /></span> Unpaid &amp; Outstanding Balances</h3>
                     <p className="text-sm text-slate-500 dark:text-slate-400">Tenants with unpaid, partial, or overdue invoices</p>
                   </div>
                   <span className="rounded-xl bg-rose-500/15 px-3 py-1.5 text-sm font-semibold text-rose-700 dark:text-rose-300">{formatCurrency(totalOutstanding, currency)}</span>
@@ -368,10 +368,10 @@ export default async function MaskaniPage({ searchParams }: { searchParams: Prom
                 )}
               </section>
 
-              <section className="rounded-2xl border border-slate-200/80 bg-white/70 p-6 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
+              <section className="rounded-2xl border border-amber-200/70 bg-gradient-to-br from-amber-500/10 via-white/70 to-white/70 p-6 shadow-sm backdrop-blur-xl dark:border-amber-500/20 dark:from-amber-500/10 dark:via-slate-900/60 dark:to-slate-900/60">
                 <div className="mb-4 flex items-center justify-between">
                   <div>
-                    <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-900 dark:text-white"><Clock className="h-5 w-5 text-amber-500" /> About to Vacate</h3>
+                    <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-900 dark:text-white"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/15"><Clock className="h-5 w-5 text-amber-500" /></span> About to Vacate</h3>
                     <p className="text-sm text-slate-500 dark:text-slate-400">Active leases ending in the next 30 days</p>
                   </div>
                   <span className="rounded-xl bg-amber-500/15 px-3 py-1.5 text-sm font-semibold text-amber-700 dark:text-amber-300">{vacatingLeases.length} lease{vacatingLeases.length === 1 ? '' : 's'}</span>
@@ -383,7 +383,7 @@ export default async function MaskaniPage({ searchParams }: { searchParams: Prom
                     {vacatingLeases.map((lease) => {
                       const daysLeft = Math.max(0, Math.ceil((lease.endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)))
                       return (
-                        <div key={lease.id} className="flex items-center justify-between rounded-xl border border-slate-200/70 bg-white/60 p-4 dark:border-white/10 dark:bg-slate-900/40">
+                        <div key={lease.id} className="flex items-center justify-between rounded-xl border border-amber-200/60 bg-amber-500/5 p-4 dark:border-amber-500/20 dark:bg-amber-500/5">
                           <div>
                             <Link href={`/maskani/tenants/${lease.tenantUserId}${orgQuery}`} className="font-medium text-slate-900 hover:text-emerald-600 hover:underline dark:text-white dark:hover:text-emerald-300">{lease.tenant.name}</Link>
                             <p className="text-xs text-slate-500 dark:text-slate-400">{lease.unit.property.name} · Unit {lease.unit.unitNumber}</p>
@@ -454,10 +454,10 @@ export default async function MaskaniPage({ searchParams }: { searchParams: Prom
             <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-6 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
               <h3 className="mb-4 text-lg font-bold text-slate-900 dark:text-white">Organization summary</h3>
               <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-                <Link href={`/maskani/tenants${orgQuery}`} className="flex items-center gap-3 rounded-xl border border-slate-200/70 bg-white/60 p-4 transition hover:bg-slate-50 dark:border-white/10 dark:bg-slate-900/40 dark:hover:bg-white/5"><FileText className="h-5 w-5 text-cyan-600 dark:text-cyan-300" /><div><p className="text-slate-500 dark:text-slate-400">Leases</p><p className="text-lg font-semibold text-slate-900 dark:text-white">{c.leases}</p></div></Link>
-                <Link href={`/maskani/invoices${orgQuery}`} className="flex items-center gap-3 rounded-xl border border-slate-200/70 bg-white/60 p-4 transition hover:bg-slate-50 dark:border-white/10 dark:bg-slate-900/40 dark:hover:bg-white/5"><CreditCard className="h-5 w-5 text-violet-600 dark:text-violet-300" /><div><p className="text-slate-500 dark:text-slate-400">Invoices</p><p className="text-lg font-semibold text-slate-900 dark:text-white">{c.invoices}</p></div></Link>
-                <Link href={`/maskani/maintenance${orgQuery}`} className="flex items-center gap-3 rounded-xl border border-slate-200/70 bg-white/60 p-4 transition hover:bg-slate-50 dark:border-white/10 dark:bg-slate-900/40 dark:hover:bg-white/5"><Wrench className="h-5 w-5 text-amber-600 dark:text-amber-300" /><div><p className="text-slate-500 dark:text-slate-400">Maintenance tickets</p><p className="text-lg font-semibold text-slate-900 dark:text-white">{c.maintenanceTickets}</p></div></Link>
-                <Link href={`/maskani/settings${orgQuery}`} className="flex items-center gap-3 rounded-xl border border-slate-200/70 bg-white/60 p-4 transition hover:bg-slate-50 dark:border-white/10 dark:bg-slate-900/40 dark:hover:bg-white/5"><Users className="h-5 w-5 text-emerald-600 dark:text-emerald-300" /><div><p className="text-slate-500 dark:text-slate-400">Members</p><p className="text-lg font-semibold text-slate-900 dark:text-white">{c.members}</p></div></Link>
+                <Link href={`/maskani/tenants${orgQuery}`} className="flex items-center gap-3 rounded-xl border border-cyan-200/70 bg-cyan-500/10 p-4 transition hover:bg-cyan-500/20 dark:border-cyan-500/20 dark:bg-cyan-500/10"><FileText className="h-5 w-5 text-cyan-600 dark:text-cyan-300" /><div><p className="text-slate-500 dark:text-slate-400">Leases</p><p className="text-lg font-semibold text-slate-900 dark:text-white">{c.leases}</p></div></Link>
+                <Link href={`/maskani/invoices${orgQuery}`} className="flex items-center gap-3 rounded-xl border border-violet-200/70 bg-violet-500/10 p-4 transition hover:bg-violet-500/20 dark:border-violet-500/20 dark:bg-violet-500/10"><CreditCard className="h-5 w-5 text-violet-600 dark:text-violet-300" /><div><p className="text-slate-500 dark:text-slate-400">Invoices</p><p className="text-lg font-semibold text-slate-900 dark:text-white">{c.invoices}</p></div></Link>
+                <Link href={`/maskani/maintenance${orgQuery}`} className="flex items-center gap-3 rounded-xl border border-amber-200/70 bg-amber-500/10 p-4 transition hover:bg-amber-500/20 dark:border-amber-500/20 dark:bg-amber-500/10"><Wrench className="h-5 w-5 text-amber-600 dark:text-amber-300" /><div><p className="text-slate-500 dark:text-slate-400">Maintenance tickets</p><p className="text-lg font-semibold text-slate-900 dark:text-white">{c.maintenanceTickets}</p></div></Link>
+                <Link href={`/maskani/settings${orgQuery}`} className="flex items-center gap-3 rounded-xl border border-emerald-200/70 bg-emerald-500/10 p-4 transition hover:bg-emerald-500/20 dark:border-emerald-500/20 dark:bg-emerald-500/10"><Users className="h-5 w-5 text-emerald-600 dark:text-emerald-300" /><div><p className="text-slate-500 dark:text-slate-400">Members</p><p className="text-lg font-semibold text-slate-900 dark:text-white">{c.members}</p></div></Link>
               </div>
             </div>
           </div>
