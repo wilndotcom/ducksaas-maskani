@@ -9,7 +9,7 @@ import {
   ReceiptText, MessageSquareWarning, ExternalLink, Zap, Shield, UserPlus, Trash2
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import { addOrganizationAdmin, updateOrganizationAdmin, removeOrganizationAdmin, updateOrganizationSettings } from './actions'
+import { addOrganizationAdmin, updateOrganizationAdmin, removeOrganizationAdmin, updateOrganizationSettings, upsertPaymentGateway, setPaymentGatewayActive, deletePaymentGateway } from './actions'
 import { ADMIN_RIGHT_KEYS, DEFAULT_ADMIN_RIGHTS, RIGHT_LABELS, type AdminRightKey } from './rights'
 import { MobileNav } from '@/components/mobile-nav'
 
@@ -111,6 +111,7 @@ export function MaskaniSettingsManager({ organization, orgQuery, roleLabel, stat
   const [maintenance, setMaintenance] = useState(init.maintenance)
   const [complaints, setComplaints] = useState(init.complaints)
   const [team, setTeam] = useState(init.team)
+  const [gwProvider, setGwProvider] = useState<'mpesa_paybill' | 'mpesa_till' | 'paystack_subaccount' | 'bank_transfer'>('mpesa_paybill')
 
   const [isPending, startTransition] = useTransition()
   const [adminMode, setAdminMode] = useState<'existing' | 'new'>('existing')
@@ -336,10 +337,57 @@ export function MaskaniSettingsManager({ organization, orgQuery, roleLabel, stat
                     <div className="rounded-xl border border-slate-200/70 bg-white/60 p-4 dark:border-white/10 dark:bg-slate-900/40">
                       <p className="mb-2 flex items-center gap-2 font-semibold text-slate-900 dark:text-white"><Wallet className="h-4 w-4 text-emerald-500" /> Landlord Payment Gateways</p>
                       {gateways.length === 0 ? (
-                        <p className="text-sm text-slate-600 dark:text-slate-300">No gateways configured. Provision from master template or configure M-Pesa Paybill/Till, Paystack, or bank transfer for tenant rent collection.</p>
+                        <p className="text-sm text-slate-600 dark:text-slate-300">No gateways configured. Add M-Pesa Paybill/Till, Paystack, or bank transfer below so tenants can pay rent online.</p>
                       ) : (
-                        <div className="space-y-2">{gateways.map((g) => <div key={g.id} className="flex items-center justify-between rounded-lg border border-slate-200/70 bg-white/70 px-3 py-2 text-sm dark:border-white/10 dark:bg-white/5"><span className="font-medium capitalize">{g.provider.replace(/_/g, ' ')}</span><span className="text-slate-500 dark:text-slate-400">{g.accountNumber}</span><span className={`rounded-full px-2 py-0.5 text-xs ${g.isActive ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'bg-slate-500/15 text-slate-600'}`}>{g.isActive ? 'Active' : 'Off'}</span></div>)}</div>
+                        <div className="space-y-2">{gateways.map((g) => (
+                          <div key={g.id} className="flex items-center justify-between gap-2 rounded-lg border border-slate-200/70 bg-white/70 px-3 py-2 text-sm dark:border-white/10 dark:bg-white/5">
+                            <div className="min-w-0"><span className="font-medium capitalize">{g.provider.replace(/_/g, ' ')}</span><span className="ml-2 text-slate-500 dark:text-slate-400">{g.accountNumber}</span></div>
+                            <div className="flex shrink-0 items-center gap-1.5">
+                              <button type="button" onClick={() => { const fd = new FormData(); fd.set('orgId', organization.id); fd.set('id', g.id); fd.set('isActive', String(!g.isActive)); runAction(setPaymentGatewayActive, fd, g.isActive ? 'Gateway disabled' : 'Gateway enabled') }} className={`rounded-full px-2 py-0.5 text-xs ${g.isActive ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'bg-slate-500/15 text-slate-600 dark:text-slate-300'}`}>{g.isActive ? 'Active' : 'Off'}</button>
+                              <button type="button" onClick={() => { if (confirm(`Remove ${g.provider.replace(/_/g, ' ')} gateway?`)) { const fd = new FormData(); fd.set('orgId', organization.id); fd.set('id', g.id); runAction(deletePaymentGateway, fd, 'Gateway removed') } }} className="rounded-lg p-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10"><Trash2 className="h-3.5 w-3.5" /></button>
+                            </div>
+                          </div>
+                        ))}</div>
                       )}
+                      <form action={(fd) => { fd.set('orgId', organization.id); runAction(upsertPaymentGateway, fd, 'Gateway saved — tenants can now pay with it') }} className="mt-4 space-y-3 rounded-xl border border-dashed border-slate-300 p-4 dark:border-white/15">
+                        <p className="text-sm font-semibold text-slate-900 dark:text-white">Add / update gateway</p>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div>
+                            <label className="mb-1 block text-xs font-medium">Provider</label>
+                            <select value={gwProvider} onChange={(e) => setGwProvider(e.target.value as typeof gwProvider)} className={inputCls}>
+                              <option value="mpesa_paybill">M-Pesa Paybill</option>
+                              <option value="mpesa_till">M-Pesa Till (Buy Goods)</option>
+                              <option value="paystack_subaccount">Card (Paystack)</option>
+                              <option value="bank_transfer">Bank transfer</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-medium">{gwProvider === 'bank_transfer' ? 'Account number' : gwProvider.startsWith('mpesa') ? 'Shortcode / Till number' : 'Account / reference'}</label>
+                            <input name="accountNumber" required className={inputCls} placeholder={gwProvider === 'bank_transfer' ? 'e.g. 0123456789' : 'e.g. 123456'} />
+                          </div>
+                        </div>
+                        {(gwProvider === 'mpesa_paybill' || gwProvider === 'mpesa_till') && (
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <div><label className="mb-1 block text-xs font-medium">Consumer key</label><input name="cred_consumerKey" className={inputCls} placeholder="Daraja consumer key" /></div>
+                            <div><label className="mb-1 block text-xs font-medium">Consumer secret</label><input name="cred_consumerSecret" type="password" className={inputCls} placeholder="Leave blank to keep existing" /></div>
+                            <div><label className="mb-1 block text-xs font-medium">Passkey</label><input name="cred_passkey" type="password" className={inputCls} placeholder="Leave blank to keep existing" /></div>
+                            <div><label className="mb-1 block text-xs font-medium">Shortcode (optional override)</label><input name="cred_shortcode" className={inputCls} placeholder="Defaults to account number" /></div>
+                          </div>
+                        )}
+                        {gwProvider === 'paystack_subaccount' && (
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <div><label className="mb-1 block text-xs font-medium">Secret key</label><input name="cred_secretKey" type="password" required className={inputCls} placeholder="sk_test_... / sk_live_..." /></div>
+                            <div><label className="mb-1 block text-xs font-medium">Currency</label><input name="cred_currency" className={inputCls} placeholder="KES" defaultValue="KES" /></div>
+                          </div>
+                        )}
+                        {gwProvider === 'bank_transfer' && (
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <div><label className="mb-1 block text-xs font-medium">Bank name</label><input name="cred_bankName" required className={inputCls} placeholder="e.g. KCB, Equity" /></div>
+                            <div><label className="mb-1 block text-xs font-medium">Account name</label><input name="cred_accountName" className={inputCls} placeholder="e.g. Kamau Properties Ltd" /></div>
+                          </div>
+                        )}
+                        <div className="flex justify-end"><button type="submit" disabled={isPending} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60 dark:bg-white dark:text-slate-900">{isPending ? 'Saving…' : 'Save gateway'}</button></div>
+                      </form>
                     </div>
                   </div>
                   <div className="mt-4 space-y-3">

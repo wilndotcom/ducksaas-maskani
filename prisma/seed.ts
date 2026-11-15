@@ -155,7 +155,9 @@ async function main() {
       accountNumber: '123456',
       apiCredentialsEncrypted: {
         consumerKey: 'test_key',
-        consumerSecret: 'test_secret'
+        consumerSecret: 'test_secret',
+        passkey: 'test_passkey',
+        shortcode: '123456'
       },
       isActive: true
     }
@@ -294,6 +296,20 @@ async function main() {
       organizationId: org2.id,
       userId: landlord2.id,
       role: 'landlord_admin'
+    }
+  })
+
+  // Bank transfer gateway for landlord 2 so tenants can pay without M-Pesa creds
+  await prisma.landlordPaymentGateway.create({
+    data: {
+      organizationId: org2.id,
+      provider: 'bank_transfer',
+      accountNumber: '0112345678',
+      apiCredentialsEncrypted: {
+        bankName: 'KCB Bank',
+        accountName: 'Ochieng Estates'
+      },
+      isActive: true
     }
   })
 

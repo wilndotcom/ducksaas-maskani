@@ -63,7 +63,7 @@ export default async function TenantsPage({ searchParams }: { searchParams: Prom
         billingDayOfMonth: l.billingDayOfMonth,
         status: l.status as 'active' | 'terminated',
       }))}
-      units={units.map((u) => ({ id: u.id, label: `${u.property.name} - ${u.unitNumber} (${u.status})` }))}
+      units={units.map((u) => ({ id: u.id, label: `${u.property.name} - ${u.unitNumber}${u.status === 'vacant' ? '' : ` (${u.status})`}`, available: u.status === 'vacant' }))}
       tenants={tenants.map((t) => ({ id: t.user.id, name: t.user.name, email: t.user.email, phone: t.user.phone }))}
       waterUnits={waterUnits}
       waterReadings={waterReadings.map((r) => ({ id: r.id, unitId: r.unitId, periodMonth: r.periodMonth, meterReading: r.meterReading, unitsConsumed: r.unitsConsumed, ratePerUnit: r.ratePerUnit, amount: r.amount, billed: r.invoiceId !== null }))}

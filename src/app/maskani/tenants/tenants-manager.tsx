@@ -9,7 +9,7 @@ import { recordWaterReading, deleteWaterReading } from '../utilities/actions'
 import { MobileNav } from '@/components/mobile-nav'
 
 type Lease = { id: string; unitId: string; tenantUserId: string; tenantName: string; tenantEmail: string; tenantPhone: string | null; unitLabel: string; startDate: string; endDate: string; billingDayOfMonth: number; status: 'active' | 'terminated' }
-type UnitOpt = { id: string; label: string }
+type UnitOpt = { id: string; label: string; available?: boolean }
 type Tenant = { id: string; name: string; email: string; phone: string | null }
 type WaterUnit = { id: string; label: string; rate: number }
 type WaterReading = { id: string; unitId: string; periodMonth: string; meterReading: number; unitsConsumed: number; ratePerUnit: number; amount: number; billed: boolean }
@@ -84,7 +84,7 @@ export function TenantsManager({ organization, orgQuery, roleLabel, leases, unit
                 <div className="mb-4 flex items-center justify-between"><h3 className="text-lg font-semibold">Add Lease</h3><button onClick={() => setOpen(false)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"><X className="h-4 w-4" /></button></div>
                 <p className="mb-4 text-sm text-slate-600 dark:text-slate-400">Required: unit, tenant email, start/end dates, billing day (1-28). If the tenant has no account yet, fill in their name and a password to create one — they can then sign in to the tenant portal.</p>
                 <form action={(fd) => { fd.set('orgId', organization.id); run(() => createLease(fd), 'Lease created', () => setOpen(false)) }} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  <div className="sm:col-span-2 lg:col-span-3"><label className="mb-1 block text-sm font-medium">Unit *</label><select name="unitId" required className={inputCls}><option value="">Select unit</option>{units.map((u) => <option key={u.id} value={u.id}>{u.label}</option>)}</select></div>
+                  <div className="sm:col-span-2 lg:col-span-3"><label className="mb-1 block text-sm font-medium">Unit *</label><select name="unitId" required className={inputCls}><option value="">Select unit</option>{units.map((u) => <option key={u.id} value={u.id} disabled={u.available === false}>{u.label}</option>)}</select></div>
                   <div><label className="mb-1 block text-sm font-medium">Tenant email *</label><input name="tenantEmail" type="email" required className={inputCls} placeholder="tenant@example.com" /></div>
                   <div><label className="mb-1 block text-sm font-medium">Tenant name <span className="text-slate-400">(required if new account)</span></label><input name="tenantName" className={inputCls} placeholder="Jane Doe" /></div>
                   <div><label className="mb-1 block text-sm font-medium">Tenant phone</label><input name="tenantPhone" className={inputCls} placeholder="+254..." /></div>

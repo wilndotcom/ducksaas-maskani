@@ -227,6 +227,86 @@ export async function subscribeToPlan(input: {
   })
 }
 
+const GATEWAY_CREDENTIAL_KEYS = ['shortcode', 'passkey', 'consumerKey', 'consumerSecret', 'secretKey', 'currency', 'bankName', 'accountName', 'accountNumber'] as const
+const GATEWAY_PROVIDERS = ['mpesa_paybill', 'mpesa_till', 'paystack_subaccount', 'bank_transfer'] as const
+
+/**
+ * Creates or updates a landlord payment gateway for the organization.
+ * Credentials are stored as JSON in apiCredentialsEncrypted (field name is historical).
+ */
+export async function upsertPaymentGateway(formData: FormData) {
+  const { orgId } = await resolveOrgContext(String(formData.get('orgId') || ''))
+  await requireMaskaniPermission('manage_settings', orgId)
+  const provider = String(formData.get('provider') || '') as (typeof GATEWAY_PROVIDERS)[number]
+  if (!GATEWAY_PROVIDERS.includes(provider)) throw new Error('Invalid provider')
+  const accountNumber = String(formData.get('accountNumber') || '').trim()
+  if (!accountNumber) throw new Error('Account number / shortcode / bank account is required')
+
+  const creds: Record<string, string> = {}
+  for (const key of GATEWAY_CREDENTIAL_KEYS) {
+    const v = String(formData.get(`cred_${key}`) || '').trim()
+    if (v) creds[key] = v
+  }
+  // Secret fields: keep existing value when left blank on update
+  const isMpesa = provider === 'mpesa_paybill' || provider === 'mpesa_till'
+  const isPaystack = provider === 'paystack_subaccount'
+  if (isMpesa && (!creds.consumerKey || !creds.consumerSecret || !creds.passkey)) {
+    throw new Error('M-Pesa requires consumer key, consumer secret, and passkey')
+  }
+  if (isPaystack && !creds.secretKey) {
+    throw new Error('Paystack requires a secret key')
+  }
+  if (provider === 'bank_transfer' && !creds.bankName) {
+    throw new Error('Bank name is required for bank transfer')
+  }
+
+  const existing = await prisma.landlordPaymentGateway.findFirst({
+    where: { organizationId: orgId, provider },
+    select: { id: true, apiCredentialsEncrypted: true },
+  })
+  if (existing) {
+    const prev = (existing.apiCredentialsEncrypted && typeof existing.apiCredentialsEncrypted === 'object' && !Array.isArray(existing.apiCredentialsEncrypted))
+      ? existing.apiCredentialsEncrypted as Record<string, unknown> : {}
+    // Preserve secrets the user left blank
+    for (const key of ['consumerKey', 'consumerSecret', 'passkey', 'secretKey'] as const) {
+      if (!creds[key] && typeof prev[key] === 'string') creds[key] = prev[key] as string
+    }
+    await prisma.landlordPaymentGateway.update({
+      where: { id: existing.id },
+      data: { accountNumber, apiCredentialsEncrypted: creds as Prisma.InputJsonValue, isActive: true },
+    })
+  } else {
+    await prisma.landlordPaymentGateway.create({
+      data: { organizationId: orgId, provider, accountNumber, apiCredentialsEncrypted: creds as Prisma.InputJsonValue, isActive: true },
+    })
+  }
+  revalidatePath('/maskani/settings')
+  revalidatePath('/portal/invoices')
+}
+
+export async function setPaymentGatewayActive(formData: FormData) {
+  const { orgId } = await resolveOrgContext(String(formData.get('orgId') || ''))
+  await requireMaskaniPermission('manage_settings', orgId)
+  const id = String(formData.get('id') || '')
+  const isActive = String(formData.get('isActive') || '') === 'true'
+  if (!id) throw new Error('Missing gateway id')
+  const res = await prisma.landlordPaymentGateway.updateMany({ where: { id, organizationId: orgId }, data: { isActive } })
+  if (res.count === 0) throw new Error('Gateway not found')
+  revalidatePath('/maskani/settings')
+  revalidatePath('/portal/invoices')
+}
+
+export async function deletePaymentGateway(formData: FormData) {
+  const { orgId } = await resolveOrgContext(String(formData.get('orgId') || ''))
+  await requireMaskaniPermission('manage_settings', orgId)
+  const id = String(formData.get('id') || '')
+  if (!id) throw new Error('Missing gateway id')
+  const res = await prisma.landlordPaymentGateway.deleteMany({ where: { id, organizationId: orgId } })
+  if (res.count === 0) throw new Error('Gateway not found')
+  revalidatePath('/maskani/settings')
+  revalidatePath('/portal/invoices')
+}
+
 export async function fetchOrganizationSettings(organizationId: string) {
   await requireMaskaniPermission('manage_settings', organizationId)
   return getOrganizationSettings(organizationId)
