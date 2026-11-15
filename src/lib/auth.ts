@@ -20,12 +20,17 @@ export const authOptions: NextAuthOptions = {
           throw new Error('Invalid credentials')
         }
 
-        if (!rateLimit(`login:${credentials.email.toLowerCase()}`, 8, 5 * 60 * 1000)) {
+        const identifier = credentials.email.trim()
+        const isEmail = identifier.includes('@')
+
+        if (!rateLimit(`login:${identifier.toLowerCase()}`, 8, 5 * 60 * 1000)) {
           throw new Error('Too many sign-in attempts. Please wait a few minutes and try again.')
         }
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
+        const user = await prisma.user.findFirst({
+          where: isEmail
+            ? { email: identifier.toLowerCase() }
+            : { username: identifier },
           include: {
             organizationMembers: {
               include: {

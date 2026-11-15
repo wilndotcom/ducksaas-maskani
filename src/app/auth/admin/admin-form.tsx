@@ -71,7 +71,7 @@ export function AdminSignInForm() {
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
                 <label htmlFor="email" className="mb-1 block text-sm font-medium text-slate-200">
-                  Email
+                  Username or Email
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -82,7 +82,7 @@ export function AdminSignInForm() {
                     onChange={(e) => setEmail(e.target.value)}
                     required
                     className={inputCls}
-                    placeholder="admin@example.com"
+                    placeholder="admin or admin@example.com"
                   />
                 </div>
               </div>

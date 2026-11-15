@@ -14,6 +14,7 @@ async function main() {
   }
 
   const adminPassword = process.env.SEED_ADMIN_PASSWORD || 'admin123'
+  const adminUsername = process.env.SEED_ADMIN_USERNAME || 'admin'
   if (!process.env.SEED_ADMIN_PASSWORD) {
     console.warn('⚠️  SEED_ADMIN_PASSWORD not set — using default "admin123" (dev only!)')
   }
@@ -39,6 +40,7 @@ async function main() {
     data: {
       name: 'Super Admin',
       email: 'admin@ducksaas.com',
+      username: adminUsername,
       passwordHash: superAdminPassword,
       globalRole: 'super_admin',
       phone: '+254700000000'
