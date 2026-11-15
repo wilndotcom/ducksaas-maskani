@@ -236,12 +236,12 @@ export default async function MaskaniPage({ searchParams }: { searchParams: Prom
   ]
 
   const statStyles = [
-    { label: 'Properties', value: c.properties, sub: 'Total properties', icon: Building2, color: 'text-cyan-600 dark:text-cyan-300', bg: 'bg-cyan-500/15', ring: 'hover:ring-cyan-400/40', href: `/maskani/properties${orgQuery}` },
-    { label: 'Units', value: c.units, sub: `${occupiedUnits} occupied · ${vacantUnits} vacant`, icon: Home, color: 'text-emerald-600 dark:text-emerald-300', bg: 'bg-emerald-500/15', ring: 'hover:ring-emerald-400/40', href: `/maskani/properties${orgQuery}` },
-    { label: 'Occupancy', value: `${occupancy}%`, sub: c.units ? `${occupiedUnits}/${c.units} units` : 'No units yet', icon: Users, color: 'text-violet-600 dark:text-violet-300', bg: 'bg-violet-500/15', ring: 'hover:ring-violet-400/40', href: `/maskani/properties${orgQuery}` },
-    { label: 'Open Issues', value: openTickets + unpaidInvoices.length, sub: `${openTickets} tickets · ${unpaidInvoices.length} unpaid invoices`, icon: Wrench, color: 'text-amber-600 dark:text-amber-300', bg: 'bg-amber-500/15', ring: 'hover:ring-amber-400/40', href: `/maskani/invoices${orgQuery}` },
-    { label: 'Vacant Units', value: vacantUnits, sub: c.units ? `${vacantUnits} of ${c.units} units available` : 'No units yet', icon: DoorOpen, color: 'text-sky-600 dark:text-sky-300', bg: 'bg-sky-500/15', ring: 'hover:ring-sky-400/40', href: `/maskani/properties${orgQuery}` },
-    { label: 'Tenants Owing', value: owingTenants, sub: owingTenants ? `${unpaidInvoices.length} invoices · ${formatCurrency(totalOutstanding, currency)} outstanding` : 'All balances clear', icon: UserX, color: owingTenants ? 'text-rose-600 dark:text-rose-300' : 'text-emerald-600 dark:text-emerald-300', bg: owingTenants ? 'bg-rose-500/15' : 'bg-emerald-500/15', ring: owingTenants ? 'hover:ring-rose-400/40' : 'hover:ring-emerald-400/40', href: `/maskani/invoices${orgQuery}` },
+    { label: 'Properties', value: c.properties, sub: 'Total properties', icon: Building2, gradient: 'from-cyan-500 via-sky-600 to-blue-700', glow: 'shadow-sky-500/30', href: `/maskani/properties${orgQuery}` },
+    { label: 'Units', value: c.units, sub: `${occupiedUnits} occupied · ${vacantUnits} vacant`, icon: Home, gradient: 'from-emerald-500 via-teal-600 to-cyan-700', glow: 'shadow-emerald-500/30', href: `/maskani/properties${orgQuery}` },
+    { label: 'Occupancy', value: `${occupancy}%`, sub: c.units ? `${occupiedUnits}/${c.units} units` : 'No units yet', icon: Users, gradient: 'from-violet-600 via-purple-600 to-fuchsia-600', glow: 'shadow-violet-500/30', href: `/maskani/properties${orgQuery}` },
+    { label: 'Open Issues', value: openTickets + unpaidInvoices.length, sub: `${openTickets} tickets · ${unpaidInvoices.length} unpaid invoices`, icon: Wrench, gradient: 'from-amber-500 via-orange-600 to-rose-600', glow: 'shadow-orange-500/30', href: `/maskani/invoices${orgQuery}` },
+    { label: 'Vacant Units', value: vacantUnits, sub: c.units ? `${vacantUnits} of ${c.units} units available` : 'No units yet', icon: DoorOpen, gradient: 'from-sky-500 via-blue-600 to-indigo-700', glow: 'shadow-blue-500/30', href: `/maskani/properties${orgQuery}` },
+    { label: 'Tenants Owing', value: owingTenants, sub: owingTenants ? `${unpaidInvoices.length} invoices · ${formatCurrency(totalOutstanding, currency)} outstanding` : 'All balances clear', icon: UserX, gradient: owingTenants ? 'from-rose-600 via-red-600 to-orange-600' : 'from-emerald-500 via-green-600 to-teal-700', glow: owingTenants ? 'shadow-rose-500/30' : 'shadow-emerald-500/30', href: `/maskani/invoices${orgQuery}` },
   ]
 
   return (
@@ -359,13 +359,16 @@ export default async function MaskaniPage({ searchParams }: { searchParams: Prom
               {statStyles.map((s) => {
                 const Icon = s.icon
                 return (
-                  <Link key={s.label} href={s.href} className={`block rounded-2xl border border-slate-200/80 bg-white/70 p-5 shadow-sm ring-1 ring-transparent backdrop-blur-xl transition ${s.ring} hover:shadow-md dark:border-white/10 dark:bg-white/5`}>
-                    <div className="mb-3 flex items-center justify-between">
-                      <p className="text-sm text-slate-500 dark:text-slate-400">{s.label}</p>
-                      <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${s.bg} ${s.color}`}><Icon className="h-5 w-5" /></span>
+                  <Link key={s.label} href={s.href} className={`group relative block overflow-hidden rounded-2xl bg-gradient-to-br ${s.gradient} p-[1px] shadow-xl ${s.glow} transition hover:-translate-y-0.5`}>
+                    <div className="relative h-full rounded-2xl bg-white/10 p-5 backdrop-blur-sm dark:bg-slate-950/20">
+                      <div className="absolute -right-6 -top-6 h-20 w-20 rounded-full bg-white/30 blur-2xl transition group-hover:bg-white/40" />
+                      <div className="mb-3 flex items-start justify-between">
+                        <p className="text-sm font-medium text-white/90">{s.label}</p>
+                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/25 backdrop-blur"><Icon className="h-5 w-5 text-white" /></span>
+                      </div>
+                      <p className="text-3xl font-extrabold tracking-tight text-white">{s.value}</p>
+                      <p className="mt-1 text-xs text-white/80">{s.sub}</p>
                     </div>
-                    <p className="text-3xl font-bold text-slate-900 dark:text-white">{s.value}</p>
-                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{s.sub}</p>
                   </Link>
                 )
               })}
