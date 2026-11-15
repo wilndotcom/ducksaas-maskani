@@ -25,8 +25,8 @@ async function orgMeta(organizationId: string) {
 
 /**
  * Syncs organization subscription status with expiry.
- * - active + expired within grace window (3 days) -> grace_period (read-only)
- * - active/grace_period + expired past grace window -> suspended_readonly
+ * - any non-suspended org past subscriptionEndsAt -> suspended_readonly (no grace period)
+ * - 'grace_period' remains available as a manual admin-set read-only status
  */
 export async function syncOrganizationSubscription(organizationId: string): Promise<OrgSubscriptionState> {
   const org = await prisma.organization.findUnique({
@@ -38,19 +38,11 @@ export async function syncOrganizationSubscription(organizationId: string): Prom
   let status: OrganizationStatus = org.status
   const expired = isPast(org.subscriptionEndsAt)
   let autoChanged = false
-  const graceMs = 3 * 24 * 60 * 60 * 1000
-  const pastGrace = !!org.subscriptionEndsAt && Date.now() > org.subscriptionEndsAt.getTime() + graceMs
 
-  if (expired) {
-    if (status === 'active') {
-      status = pastGrace ? 'suspended_readonly' : 'grace_period'
-      await prisma.organization.update({ where: { id: org.id }, data: { status } })
-      autoChanged = status === 'suspended_readonly'
-    } else if (status === 'grace_period' && pastGrace) {
-      status = 'suspended_readonly'
-      await prisma.organization.update({ where: { id: org.id }, data: { status } })
-      autoChanged = true
-    }
+  if (expired && status !== 'suspended_readonly') {
+    status = 'suspended_readonly'
+    await prisma.organization.update({ where: { id: org.id }, data: { status } })
+    autoChanged = true
   }
 
   if (autoChanged) {

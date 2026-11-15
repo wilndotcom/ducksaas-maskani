@@ -22,8 +22,9 @@ import {
   Mail,
   Phone,
   Lock,
+  Clock,
 } from 'lucide-react'
-import { createOrganization, updateOrganization, deleteOrganization } from './actions'
+import { createOrganization, updateOrganization, deleteOrganization, grantTrial } from './actions'
 
 type Org = {
   id: string
@@ -164,6 +165,27 @@ export function OrganizationsManager({ organizations, plans, users, rootDomain }
         closeForm()
       } catch (e) {
         flash(e instanceof Error ? e.message : 'Failed to save organization')
+      }
+    })
+  }
+
+  const onGrantTrial = (o: Org) => {
+    const input = prompt(`Grant a free trial to "${o.name}". Enter number of days:`, '14')
+    if (input === null) return
+    const days = Number(input)
+    if (!Number.isFinite(days) || days <= 0) {
+      flash('Invalid number of days')
+      return
+    }
+    startTransition(async () => {
+      try {
+        const fd = new FormData()
+        fd.set('id', o.id)
+        fd.set('trialDays', String(days))
+        await grantTrial(fd)
+        flash(`Trial granted to ${o.name} (${days} days)`)
+      } catch (e) {
+        flash(e instanceof Error ? e.message : 'Failed to grant trial')
       }
     })
   }
@@ -444,6 +466,7 @@ export function OrganizationsManager({ organizations, plans, users, rootDomain }
                   <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{o.createdAt}</td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-2">
+                      <button onClick={() => onGrantTrial(o)} disabled={pending} title="Grant free trial" className="rounded-lg border border-cyan-200 p-2 text-cyan-600 hover:bg-cyan-50 disabled:opacity-50 dark:border-cyan-500/30 dark:text-cyan-300 dark:hover:bg-cyan-500/10"><Clock className="h-4 w-4" /></button>
                       <button onClick={() => openEdit(o)} title="Edit" className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-100 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"><Pencil className="h-4 w-4" /></button>
                       <button onClick={() => onDelete(o.id, o.name)} disabled={pending} title="Delete" className="rounded-lg border border-rose-200 p-2 text-rose-600 hover:bg-rose-50 disabled:opacity-50 dark:border-rose-500/30 dark:text-rose-300 dark:hover:bg-rose-500/10"><Trash2 className="h-4 w-4" /></button>
                     </div>

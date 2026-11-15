@@ -17,11 +17,6 @@ function slugify(name: string) {
 
 export type RegisterState = { ok?: boolean; error?: string }
 
-function trialEndsAt() {
-  const days = Number(process.env.TRIAL_PERIOD_DAYS) || 14
-  return new Date(Date.now() + days * 24 * 60 * 60 * 1000)
-}
-
 export async function registerOrganization(_prev: RegisterState, formData: FormData): Promise<RegisterState> {
   try {
     const ownerName = String(formData.get('ownerName') || '').trim()
@@ -77,9 +72,11 @@ export async function registerOrganization(_prev: RegisterState, formData: FormD
           name: orgName,
           slug,
           ownerUserId: user.id,
-          status: 'active',
+          // New orgs start suspended: a super admin grants a trial or assigns
+          // a plan from DuckSaaS before the workspace becomes accessible.
+          status: 'suspended_readonly',
           subscriptionPlanId: null,
-          subscriptionEndsAt: trialEndsAt(),
+          subscriptionEndsAt: null,
           members: {
             create: { userId: user.id, role: 'landlord_admin' },
           },

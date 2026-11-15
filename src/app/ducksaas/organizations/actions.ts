@@ -187,6 +187,24 @@ export async function updateOrganization(formData: FormData) {
   revalidatePath('/ducksaas/plans')
 }
 
+export async function grantTrial(formData: FormData) {
+  await ensureAdmin()
+  const id = String(formData.get('id') || '')
+  const days = Number(formData.get('trialDays')) || Number(process.env.TRIAL_PERIOD_DAYS) || 14
+  if (!id) throw new Error('Missing organization id')
+  if (!Number.isFinite(days) || days <= 0 || days > 365) throw new Error('Trial days must be between 1 and 365')
+
+  await prisma.organization.update({
+    where: { id },
+    data: {
+      status: 'active',
+      subscriptionEndsAt: new Date(Date.now() + days * 24 * 60 * 60 * 1000),
+    },
+  })
+  revalidatePath('/ducksaas/organizations')
+  revalidatePath('/ducksaas')
+}
+
 export async function deleteOrganization(formData: FormData) {
   await ensureAdmin()
   const id = String(formData.get('id') || '')
