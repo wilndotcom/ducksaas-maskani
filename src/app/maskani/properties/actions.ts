@@ -52,6 +52,8 @@ export async function deleteProperty(formData: FormData) {
   await requireMaskaniPermission('manage_properties', orgId)
   const id = String(formData.get('id') || '')
   if (!id) throw new Error('Missing id')
+  const occupied = await prisma.unit.count({ where: { propertyId: id, organizationId: orgId, status: { not: 'vacant' } } })
+  if (occupied > 0) throw new Error('This property has occupied or maintenance units. Terminate leases and vacate units before deleting.')
   const res = await prisma.property.deleteMany({ where: { id, organizationId: orgId } })
   if (res.count === 0) throw new Error('Property not found')
   revalidatePath('/maskani')
@@ -66,21 +68,26 @@ export async function createUnit(formData: FormData) {
   const floorRaw = String(formData.get('floor') || '').trim()
   const monthlyRent = Number(formData.get('monthlyRent') || 0)
   const depositAmount = Number(formData.get('depositAmount') || 0)
+  const waterRatePerUnit = Number(formData.get('waterRatePerUnit') || 0)
   const status = String(formData.get('status') || 'vacant') as 'vacant' | 'occupied' | 'maintenance'
 
   if (!propertyId || !unitNumber) throw new Error('Property and unit number are required')
   if (!Number.isFinite(monthlyRent) || monthlyRent < 0) throw new Error('Monthly rent must be 0 or more')
   if (!Number.isFinite(depositAmount) || depositAmount < 0) throw new Error('Deposit amount must be 0 or more')
+  if (!Number.isFinite(waterRatePerUnit) || waterRatePerUnit < 0) throw new Error('Water rate must be 0 or more')
   if (!['vacant', 'occupied', 'maintenance'].includes(status)) throw new Error('Invalid status')
 
   const property = await prisma.property.findFirst({ where: { id: propertyId, organizationId: orgId }, select: { id: true } })
   if (!property) throw new Error('Property not found')
 
+  const duplicate = await prisma.unit.findFirst({ where: { propertyId, unitNumber, organizationId: orgId }, select: { id: true } })
+  if (duplicate) throw new Error(`Unit "${unitNumber}" already exists in this property`)
+
   const floor = floorRaw === '' ? null : Number(floorRaw)
   if (floor !== null && (!Number.isInteger(floor))) throw new Error('Floor must be a whole number')
 
   await prisma.unit.create({
-    data: { organizationId: orgId, propertyId, unitNumber, floor, monthlyRent, depositAmount, status },
+    data: { organizationId: orgId, propertyId, unitNumber, floor, monthlyRent, depositAmount, waterRatePerUnit, status },
   })
   revalidatePath('/maskani')
   revalidatePath('/maskani/properties')
@@ -95,22 +102,27 @@ export async function updateUnit(formData: FormData) {
   const floorRaw = String(formData.get('floor') || '').trim()
   const monthlyRent = Number(formData.get('monthlyRent') || 0)
   const depositAmount = Number(formData.get('depositAmount') || 0)
+  const waterRatePerUnit = Number(formData.get('waterRatePerUnit') || 0)
   const status = String(formData.get('status') || 'vacant') as 'vacant' | 'occupied' | 'maintenance'
 
   if (!id || !propertyId || !unitNumber) throw new Error('Missing required fields')
   if (!Number.isFinite(monthlyRent) || monthlyRent < 0) throw new Error('Monthly rent must be 0 or more')
   if (!Number.isFinite(depositAmount) || depositAmount < 0) throw new Error('Deposit amount must be 0 or more')
+  if (!Number.isFinite(waterRatePerUnit) || waterRatePerUnit < 0) throw new Error('Water rate must be 0 or more')
   if (!['vacant', 'occupied', 'maintenance'].includes(status)) throw new Error('Invalid status')
 
   const property = await prisma.property.findFirst({ where: { id: propertyId, organizationId: orgId }, select: { id: true } })
   if (!property) throw new Error('Property not found')
+
+  const duplicate = await prisma.unit.findFirst({ where: { propertyId, unitNumber, organizationId: orgId, id: { not: id } }, select: { id: true } })
+  if (duplicate) throw new Error(`Unit "${unitNumber}" already exists in this property`)
 
   const floor = floorRaw === '' ? null : Number(floorRaw)
   if (floor !== null && (!Number.isInteger(floor))) throw new Error('Floor must be a whole number')
 
   const res = await prisma.unit.updateMany({
     where: { id, organizationId: orgId },
-    data: { propertyId, unitNumber, floor, monthlyRent, depositAmount, status },
+    data: { propertyId, unitNumber, floor, monthlyRent, depositAmount, waterRatePerUnit, status },
   })
   if (res.count === 0) throw new Error('Unit not found')
   revalidatePath('/maskani')
@@ -122,8 +134,11 @@ export async function deleteUnit(formData: FormData) {
   await requireMaskaniPermission('manage_properties', orgId)
   const id = String(formData.get('id') || '')
   if (!id) throw new Error('Missing id')
-  const res = await prisma.unit.deleteMany({ where: { id, organizationId: orgId } })
-  if (res.count === 0) throw new Error('Unit not found')
+  const unit = await prisma.unit.findFirst({ where: { id, organizationId: orgId }, select: { status: true, _count: { select: { leases: true } } } })
+  if (!unit) throw new Error('Unit not found')
+  if (unit.status !== 'vacant') throw new Error('Only vacant units can be deleted. Terminate the lease and set the unit to vacant first.')
+  if (unit._count.leases > 0) throw new Error('This unit has lease history and cannot be deleted')
+  await prisma.unit.delete({ where: { id } })
   revalidatePath('/maskani')
   revalidatePath('/maskani/properties')
 }

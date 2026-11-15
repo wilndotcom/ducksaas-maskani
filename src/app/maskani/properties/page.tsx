@@ -61,7 +61,7 @@ export default async function PropertiesPage({ searchParams }: { searchParams: P
     include: {
       units: {
         orderBy: { unitNumber: 'asc' },
-        select: { id: true, unitNumber: true, floor: true, monthlyRent: true, depositAmount: true, status: true, propertyId: true },
+        select: { id: true, unitNumber: true, floor: true, monthlyRent: true, depositAmount: true, waterRatePerUnit: true, status: true, propertyId: true },
       },
     },
   })
@@ -78,6 +78,7 @@ export default async function PropertiesPage({ searchParams }: { searchParams: P
       floor: u.floor,
       monthlyRent: u.monthlyRent,
       depositAmount: u.depositAmount,
+      waterRatePerUnit: u.waterRatePerUnit,
       status: u.status as 'vacant' | 'occupied' | 'maintenance',
       propertyId: u.propertyId,
     })),

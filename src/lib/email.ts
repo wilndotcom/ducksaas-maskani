@@ -41,6 +41,72 @@ export async function sendWelcomeEmail(params: { to: string; name: string; orgNa
   return sendMail(to, subject, text)
 }
 
+export async function sendPaymentReceiptEmail(params: {
+  to: string
+  tenantName: string
+  organizationName: string
+  invoiceNumber: string
+  amount: number
+  currency: string
+  method: string
+  paidAt: Date
+}) {
+  const subject = `Payment received — ${params.invoiceNumber}`
+  const text = [
+    `Hi ${params.tenantName},`,
+    '',
+    `We received your payment of ${params.currency} ${params.amount.toFixed(2)} for invoice ${params.invoiceNumber} (${params.organizationName}) via ${params.method.replace('_', ' ')} on ${params.paidAt.toLocaleDateString()}.`,
+    '',
+    'Thank you!',
+    '',
+    '— DuckSaaS/Maskani',
+  ].join('\n')
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto;">
+      <h2 style="color: #0f766e;">Payment Received</h2>
+      <p>Hi ${params.tenantName},</p>
+      <p>We received your payment of <strong>${params.currency} ${params.amount.toLocaleString()}</strong> for invoice <strong>${params.invoiceNumber}</strong> (${params.organizationName}) via ${params.method.replace('_', ' ')} on ${params.paidAt.toLocaleDateString()}.</p>
+      <p>Thank you!</p>
+    </div>
+  `
+  return sendMail(params.to, subject, text, html)
+}
+
+export async function sendPaymentReminderEmail(params: {
+  to: string
+  tenantName: string
+  organizationName: string
+  invoiceNumber: string
+  amountDue: number
+  amountPaid: number
+  currency: string
+  dueDate: Date
+  portalUrl: string
+}) {
+  const balance = params.amountDue - params.amountPaid
+  const subject = `Payment reminder — ${params.invoiceNumber} is overdue`
+  const text = [
+    `Hi ${params.tenantName},`,
+    '',
+    `Your invoice ${params.invoiceNumber} for ${params.organizationName} was due on ${params.dueDate.toLocaleDateString()} and is now overdue.`,
+    `Outstanding balance: ${params.currency} ${balance.toFixed(2)} (of ${params.currency} ${params.amountDue.toFixed(2)})`,
+    '',
+    `Pay now: ${params.portalUrl}`,
+    '',
+    '— DuckSaaS/Maskani',
+  ].join('\n')
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto;">
+      <h2 style="color: #b91c1c;">Payment Reminder</h2>
+      <p>Hi ${params.tenantName},</p>
+      <p>Your invoice <strong>${params.invoiceNumber}</strong> for <strong>${params.organizationName}</strong> was due on ${params.dueDate.toLocaleDateString()} and is now overdue.</p>
+      <p>Outstanding balance: <strong>${params.currency} ${balance.toLocaleString()}</strong> (of ${params.currency} ${params.amountDue.toLocaleString()})</p>
+      <p><a href="${params.portalUrl}" style="display:inline-block;background:#0d9488;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;">Pay now in your portal</a></p>
+    </div>
+  `
+  return sendMail(params.to, subject, text, html)
+}
+
 export async function sendInvoiceEmail(params: { to: string; name: string; orgName: string; invoiceNumber: string; amount: number; currency: string; dueDate: string }) {
   const { to, name, orgName, invoiceNumber, amount, currency, dueDate } = params
   const subject = `Invoice ${invoiceNumber} from ${orgName}`

@@ -31,10 +31,17 @@ export async function createLease(formData: FormData) {
   const tenantPassword = String(formData.get('tenantPassword') || '')
 
   const [unit, existingTenant] = await Promise.all([
-    prisma.unit.findFirst({ where: { id: unitId, organizationId: orgId }, select: { id: true } }),
+    prisma.unit.findFirst({
+      where: { id: unitId, organizationId: orgId },
+      select: { id: true, status: true, _count: { select: { leases: { where: { status: 'active' } } } } },
+    }),
     prisma.user.findUnique({ where: { email: tenantEmail }, select: { id: true } }),
   ])
   if (!unit) throw new Error('Selected unit not found in this organization')
+  if (status === 'active') {
+    if (unit._count.leases > 0) throw new Error('This unit already has an active lease. Terminate it first.')
+    if (unit.status !== 'vacant') throw new Error('This unit is not vacant. Set it to vacant before creating an active lease.')
+  }
 
   let tenant = existingTenant
   let createdTenantAccount = false
@@ -101,8 +108,15 @@ export async function updateLeaseStatus(formData: FormData) {
   const id = String(formData.get('id') || '')
   const status = String(formData.get('status') || 'active') as 'active' | 'terminated'
   if (!id || !['active', 'terminated'].includes(status)) throw new Error('Invalid request')
-  const lease = await prisma.lease.findFirst({ where: { id, organizationId: orgId }, select: { id: true, unitId: true } })
+  const lease = await prisma.lease.findFirst({
+    where: { id, organizationId: orgId },
+    select: { id: true, unitId: true, endDate: true, unit: { select: { _count: { select: { leases: { where: { status: 'active', id: { not: id } } } } } } } },
+  })
   if (!lease) throw new Error('Lease not found')
+  if (status === 'active') {
+    if (lease.endDate < new Date()) throw new Error('Cannot activate an expired lease. Create a new lease instead.')
+    if (lease.unit._count.leases > 0) throw new Error('This unit already has another active lease')
+  }
   await prisma.$transaction(async (tx) => {
     await tx.lease.update({ where: { id }, data: { status } })
     if (status === 'terminated') {

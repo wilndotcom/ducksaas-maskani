@@ -1,5 +1,6 @@
 import { prisma } from './prisma'
 import { notifyTelegram } from './telegram'
+import { sendPaymentReceiptEmail } from './email'
 import type { PaymentGatewayProvider, Prisma } from '@prisma/client'
 
 export type GatewayCredentials = Record<string, string>
@@ -271,7 +272,7 @@ export async function applySuccessfulPayment(params: {
   const { organizationId, invoiceId, amount } = params
   if (!Number.isFinite(amount) || amount <= 0) throw new Error('Invalid payment amount')
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     if (params.gatewayReference) {
       const existing = await tx.rentPayment.findFirst({
         where: { organizationId, gatewayReference: params.gatewayReference },
@@ -308,6 +309,39 @@ export async function applySuccessfulPayment(params: {
     }
     return { duplicate: false as const, invoiceId: invoice.id, newPaid }
   })
+
+  if ('duplicate' in result && !result.duplicate && result.invoiceId) {
+    const [invoice, tenant, org] = await Promise.all([
+      prisma.invoice.findUnique({ where: { id: result.invoiceId }, select: { invoiceNumber: true, amountDue: true } }),
+      prisma.invoice.findUnique({ where: { id: result.invoiceId }, select: { tenant: { select: { name: true, email: true } } } }),
+      prisma.organization.findUnique({ where: { id: organizationId }, select: { name: true, settings: true } }),
+    ])
+    const orgSettings = (org?.settings as Record<string, unknown>) || {}
+    const currency = String(orgSettings.currency || 'KES')
+    if (invoice && tenant?.tenant?.email) {
+      sendPaymentReceiptEmail({
+        to: tenant.tenant.email,
+        tenantName: tenant.tenant.name,
+        organizationName: org?.name || 'your property manager',
+        invoiceNumber: invoice.invoiceNumber,
+        amount,
+        currency,
+        method: params.paymentMethod,
+        paidAt: params.paidAt || new Date(),
+      }).catch(() => {})
+    }
+    await notifyTelegram('Payment received', {
+      event: 'payment_received',
+      orgId: organizationId,
+      invoiceId: result.invoiceId,
+      invoiceNumber: invoice?.invoiceNumber,
+      amount,
+      method: params.paymentMethod,
+      gatewayReference: params.gatewayReference || null,
+    })
+  }
+
+  return result
 }
 
 export async function markPaymentSession(params: {

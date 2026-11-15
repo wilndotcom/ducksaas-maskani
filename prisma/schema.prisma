@@ -161,6 +161,7 @@ model Organization {
   rentPayments         RentPayment[]
   maintenanceTickets   MaintenanceTicket[]
   complaints           Complaint[]
+  waterReadings        WaterReading[]
 
   @@index([ownerUserId])
   @@index([slug])
@@ -283,6 +284,7 @@ model Unit {
   floor         Int?
   monthlyRent   Float      @map("monthly_rent")
   depositAmount Float      @map("deposit_amount")
+  waterRatePerUnit Float   @default(0) @map("water_rate_per_unit")
   status        UnitStatus @default(vacant)
   createdAt     DateTime   @default(now()) @map("created_at")
   updatedAt     DateTime   @updatedAt @map("updated_at")
@@ -295,6 +297,7 @@ model Unit {
   invoices       Invoice[]
   maintenanceTickets MaintenanceTicket[]
   complaints         Complaint[]
+  waterReadings      WaterReading[]
 
   @@unique([propertyId, unitNumber])
   @@index([organizationId])
@@ -338,6 +341,7 @@ model Invoice {
   billingMonth      String        @map("billing_month")
   amountDue         Float         @map("amount_due")
   amountPaid        Float         @default(0) @map("amount_paid")
+  waterAmount       Float         @default(0) @map("water_amount")
   dueDate           DateTime      @map("due_date")
   status            InvoiceStatus @default(unpaid)
   createdAt         DateTime      @default(now()) @map("created_at")
@@ -350,6 +354,7 @@ model Invoice {
   tenant            User          @relation("TenantInvoices", fields: [tenantUserId], references: [id], onDelete: Cascade)
   payments          RentPayment[]
   paymentSessions   PaymentSession[]
+  waterReadings     WaterReading[]
 
   @@unique([invoiceNumber])
   @@index([organizationId])
@@ -442,6 +447,30 @@ model MaintenanceTicket {
   @@index([status])
   @@index([priority])
   @@map("maintenance_tickets")
+}
+
+model WaterReading {
+  id               String   @id @default(cuid())
+  organizationId   String   @map("organization_id")
+  unitId           String   @map("unit_id")
+  periodMonth      String   @map("period_month") // YYYY-MM
+  meterReading     Float    @map("meter_reading")
+  previousReading  Float?   @map("previous_reading")
+  unitsConsumed    Float    @map("units_consumed")
+  ratePerUnit      Float    @map("rate_per_unit")
+  amount           Float
+  invoiceId        String?  @map("invoice_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  unit             Unit         @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  invoice          Invoice?     @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
+  @@unique([unitId, periodMonth])
+  @@index([organizationId])
+  @@index([unitId])
+  @@index([invoiceId])
+  @@map("water_readings")
 }
 
 model Complaint {

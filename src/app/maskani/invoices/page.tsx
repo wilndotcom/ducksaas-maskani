@@ -42,6 +42,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
         billingMonth: i.billingMonth,
         amountDue: i.amountDue,
         amountPaid: i.amountPaid,
+        waterAmount: i.waterAmount,
         dueDate: i.dueDate.toISOString().slice(0, 10),
         status: i.status as 'unpaid' | 'partial' | 'paid' | 'overdue',
         tenantName: i.tenant.name,

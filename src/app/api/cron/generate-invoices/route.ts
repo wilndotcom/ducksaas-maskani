@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { notifyTelegram } from '@/lib/telegram'
-import { sendInvoiceEmail } from '@/lib/email'
+import { sendInvoiceEmail, sendPaymentReminderEmail } from '@/lib/email'
 
 /**
  * Generates monthly rent invoices for active leases.
@@ -37,6 +37,43 @@ export async function GET(req: Request) {
     },
   })
 
+  // Flip unpaid invoices past their due date to overdue and send a one-time reminder.
+  let overdueMarked = 0
+  let remindersSent = 0
+  const stale = await prisma.invoice.findMany({
+    where: { status: 'unpaid', dueDate: { lt: now } },
+    select: {
+      id: true, invoiceNumber: true, amountDue: true, amountPaid: true, dueDate: true,
+      tenantUserId: true,
+      tenant: { select: { name: true, email: true } },
+      organization: { select: { name: true, settings: true, status: true } },
+    },
+  })
+  for (const inv of stale) {
+    if (inv.organization.status === 'suspended_readonly') continue
+    const updated = await prisma.invoice.updateMany({
+      where: { id: inv.id, status: 'unpaid' },
+      data: { status: 'overdue' },
+    })
+    if (updated.count === 0) continue
+    overdueMarked++
+    const s = (inv.organization.settings as Record<string, unknown>) || {}
+    if (inv.tenant.email) {
+      sendPaymentReminderEmail({
+        to: inv.tenant.email,
+        tenantName: inv.tenant.name,
+        organizationName: inv.organization.name,
+        invoiceNumber: inv.invoiceNumber,
+        amountDue: inv.amountDue,
+        amountPaid: inv.amountPaid,
+        currency: String(s.currency || 'KES'),
+        dueDate: inv.dueDate,
+        portalUrl: `${(process.env.NEXTAUTH_URL || 'http://localhost:3000').replace(/\/$/, '')}/portal/invoices`,
+      }).catch(() => {})
+      remindersSent++
+    }
+  }
+
   let created = 0
   let skipped = 0
   const errors: string[] = []
@@ -50,6 +87,11 @@ export async function GET(req: Request) {
       }
       // Skip orgs whose subscription is suspended
       if (lease.organization.status === 'suspended_readonly') {
+        skipped++
+        continue
+      }
+      // Do not bill leases that have already ended
+      if (lease.endDate < now) {
         skipped++
         continue
       }
@@ -69,7 +111,14 @@ export async function GET(req: Request) {
 
       const dueDate = new Date(year, month, lease.billingDayOfMonth)
       dueDate.setDate(dueDate.getDate() + graceDays)
-      const amountDue = lease.unit.monthlyRent
+
+      // Roll any unbilled water reading for this unit+month into the invoice
+      const waterReading = await prisma.waterReading.findFirst({
+        where: { unitId: lease.unitId, periodMonth: billingMonth, invoiceId: null },
+      })
+      const rentAmount = lease.unit.monthlyRent
+      const waterAmount = waterReading ? waterReading.amount : 0
+      const amountDue = rentAmount + waterAmount
       if (!Number.isFinite(amountDue) || amountDue <= 0) {
         skipped++
         continue
@@ -88,10 +137,14 @@ export async function GET(req: Request) {
           billingMonth,
           amountDue,
           amountPaid: 0,
+          waterAmount,
           dueDate,
           status,
         },
       })
+      if (waterReading) {
+        await prisma.waterReading.update({ where: { id: waterReading.id }, data: { invoiceId: invoice.id } })
+      }
       created++
 
       if (lease.tenant.email) {
@@ -120,5 +173,5 @@ export async function GET(req: Request) {
     })
   }
 
-  return NextResponse.json({ ok: true, billingMonth, created, skipped, errors })
+  return NextResponse.json({ ok: true, billingMonth, created, skipped, overdueMarked, remindersSent, errors })
 }

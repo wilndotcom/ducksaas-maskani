@@ -3,7 +3,8 @@
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { requireMaskaniPermission, resolveActionOrgId } from '@/lib/maskani'
-import { sendInvoiceEmail } from '@/lib/email'
+import { sendInvoiceEmail, sendPaymentReceiptEmail } from '@/lib/email'
+import { notifyTelegram } from '@/lib/telegram'
 
 const resolveOrgId = (orgParam?: string | null) => resolveActionOrgId(orgParam, 'maskani.invoices')
 
@@ -41,6 +42,9 @@ export async function createInvoice(formData: FormData) {
     select: { id: true, unitId: true, tenantUserId: true },
   })
   if (!lease) throw new Error('Lease not found')
+
+  const existing = await prisma.invoice.findFirst({ where: { leaseId: lease.id, billingMonth }, select: { invoiceNumber: true } })
+  if (existing) throw new Error(`Invoice ${existing.invoiceNumber} already exists for this lease and billing month`)
 
   const { invoicePrefix, paymentGraceDays } = await getOrgInvoiceSettings(orgId)
   const effectiveDue = new Date(dueDate)
@@ -123,6 +127,35 @@ export async function recordPayment(formData: FormData) {
       data: { amountPaid: newPaid, status: invoiceStatus(invoice.amountDue, newPaid, invoice.dueDate) },
     })
   })
+
+  const [tenant, org] = await Promise.all([
+    prisma.user.findUnique({ where: { id: invoice.tenantUserId }, select: { name: true, email: true } }),
+    prisma.organization.findUnique({ where: { id: orgId }, select: { name: true, settings: true } }),
+  ])
+  const orgSettings = (org?.settings as Record<string, unknown>) || {}
+  const currency = String(orgSettings.currency || 'KES')
+  if (tenant?.email) {
+    sendPaymentReceiptEmail({
+      to: tenant.email,
+      tenantName: tenant.name,
+      organizationName: org?.name || 'your property manager',
+      invoiceNumber: invoice.invoiceNumber,
+      amount,
+      currency,
+      method: paymentMethod,
+      paidAt,
+    }).catch(() => {})
+  }
+  await notifyTelegram('Payment recorded', {
+    event: 'payment_recorded',
+    orgId,
+    invoiceId: invoice.id,
+    invoiceNumber: invoice.invoiceNumber,
+    amount,
+    method: paymentMethod,
+    recordedBy: 'landlord',
+  })
+
   revalidatePath('/maskani')
   revalidatePath('/maskani/invoices')
 }

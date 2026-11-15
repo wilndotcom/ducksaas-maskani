@@ -12,6 +12,7 @@ type Unit = {
   floor: number | null
   monthlyRent: number
   depositAmount: number
+  waterRatePerUnit: number
   status: 'vacant' | 'occupied' | 'maintenance'
   propertyId: string
 }
@@ -199,6 +200,10 @@ export function PropertiesManager({
                   <div>
                     <label className="mb-1 block text-sm font-medium">Deposit amount *</label>
                     <input name="depositAmount" type="number" min={0} step="0.01" required defaultValue={unitForm.editing?.depositAmount ?? 0} className={inputCls} />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">Water rate / unit</label>
+                    <input name="waterRatePerUnit" type="number" min={0} step="0.01" defaultValue={unitForm.editing?.waterRatePerUnit ?? 0} className={inputCls} placeholder="e.g. 0.5" />
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium">Status *</label>

@@ -71,6 +71,7 @@ export default async function PortalInvoices() {
                   <div className="text-right">
                     <p className="text-2xl font-bold">{formatCurrency(balance, currency)}</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400">of {formatCurrency(inv.amountDue, currency)} · paid {formatCurrency(inv.amountPaid, currency)}</p>
+                    {inv.waterAmount > 0 && <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">includes {formatCurrency(inv.waterAmount, currency)} water</p>}
                   </div>
                 </div>
 
