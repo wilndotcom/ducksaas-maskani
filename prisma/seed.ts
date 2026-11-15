@@ -321,9 +321,10 @@ async function main() {
     }
   })
 
-  // Create Units for Property 2
+  // Create Units for Property 2 — every occupied unit gets a real tenant + lease
+  const units2 = []
   for (let i = 1; i <= 8; i++) {
-    await prisma.unit.create({
+    const unit = await prisma.unit.create({
       data: {
         organizationId: org2.id,
         propertyId: property2.id,
@@ -331,18 +332,58 @@ async function main() {
         floor: i <= 4 ? 1 : 2,
         monthlyRent: 35000 + (i * 1500),
         depositAmount: 70000,
-        status: i <= 5 ? 'occupied' : 'vacant'
+        status: i <= 2 ? 'occupied' : 'vacant'
+      }
+    })
+    units2.push(unit)
+  }
+
+  const demoTenants = [
+    { name: 'Kevin Odhiambo', email: 'kevin@tenant2.com', username: 'tenant2', phone: '+254744444444' },
+    { name: 'Aisha Mohammed', email: 'aisha@tenant2.com', username: 'tenant3', phone: '+254755555555' },
+  ]
+  const tenantPasswordHash = await bcrypt.hash('tenant123', 10)
+  const leaseStart = new Date()
+  leaseStart.setMonth(leaseStart.getMonth() - 1)
+  const leaseEnd = new Date()
+  leaseEnd.setFullYear(leaseEnd.getFullYear() + 1)
+  for (let i = 0; i < demoTenants.length; i++) {
+    const t = demoTenants[i]
+    const tenantUser = await prisma.user.create({
+      data: {
+        name: t.name,
+        email: t.email,
+        username: t.username,
+        passwordHash: tenantPasswordHash,
+        globalRole: 'standard',
+        phone: t.phone,
+      }
+    })
+    await prisma.organizationMember.create({
+      data: { organizationId: org2.id, userId: tenantUser.id, role: 'tenant', unitId: units2[i].id }
+    })
+    await prisma.lease.create({
+      data: {
+        organizationId: org2.id,
+        unitId: units2[i].id,
+        tenantUserId: tenantUser.id,
+        startDate: leaseStart,
+        endDate: leaseEnd,
+        billingDayOfMonth: 1,
+        status: 'active',
       }
     })
   }
-  console.log('✅ Created Landlord 2 with properties and units')
+  console.log('✅ Created Landlord 2 with properties, units, and tenants')
 
   console.log('🎉 Seed completed successfully!')
   console.log('\n📝 Test Credentials:')
   console.log(`Super Admin: admin@ducksaas.com / ${process.env.SEED_ADMIN_PASSWORD ? '(from SEED_ADMIN_PASSWORD)' : 'admin123'}`)
   console.log('Landlord 1: john@landlord1.com / landlord123')
   console.log('Landlord 2: sarah@landlord2.com / landlord123')
-  console.log('Tenant: mary@tenant.com / tenant123')
+  console.log('Tenant 1: mary@tenant.com / tenant123 (username tenant1)')
+  console.log('Tenant 2: kevin@tenant2.com / tenant123 (username tenant2)')
+  console.log('Tenant 3: aisha@tenant2.com / tenant123 (username tenant3)')
 }
 
 main()
