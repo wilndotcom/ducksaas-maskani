@@ -141,6 +141,8 @@ export default async function MaskaniPage({ searchParams }: { searchParams: Prom
   const yearStart = startOfYear(now)
   const vacatingBy = addDays(now, 30)
 
+  const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1)
+
   const [
     vacantUnits,
     occupiedUnits,
@@ -151,6 +153,8 @@ export default async function MaskaniPage({ searchParams }: { searchParams: Prom
     incomeYear,
     unpaidInvoices,
     vacatingLeases,
+    monthlyPayments,
+    invoiceStatusCounts,
   ] = await Promise.all([
     prisma.unit.count({ where: { organizationId: org.id, status: 'vacant' } }),
     prisma.unit.count({ where: { organizationId: org.id, status: 'occupied' } }),
@@ -177,6 +181,11 @@ export default async function MaskaniPage({ searchParams }: { searchParams: Prom
       orderBy: { endDate: 'asc' },
       take: 10,
     }),
+    prisma.rentPayment.findMany({
+      where: { organizationId: org.id, paidAt: { gte: sixMonthsAgo } },
+      select: { amount: true, paidAt: true },
+    }),
+    prisma.invoice.groupBy({ by: ['status'], where: { organizationId: org.id }, _count: { _all: true } }),
   ])
 
   const c = org._count
@@ -192,6 +201,21 @@ export default async function MaskaniPage({ searchParams }: { searchParams: Prom
 
   const totalOutstanding = unpaidInvoices.reduce((sum, inv) => sum + (inv.amountDue - inv.amountPaid), 0)
   const owingTenants = new Set(unpaidInvoices.map((inv) => inv.tenantUserId)).size
+
+  // Last-6-months collection buckets for the trend chart
+  const paymentBuckets = new Map<string, number>()
+  for (const p of monthlyPayments) {
+    const key = `${p.paidAt.getFullYear()}-${p.paidAt.getMonth()}`
+    paymentBuckets.set(key, (paymentBuckets.get(key) ?? 0) + p.amount)
+  }
+  const trend = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1)
+    return { label: format(d, 'MMM'), value: paymentBuckets.get(`${d.getFullYear()}-${d.getMonth()}`) ?? 0, current: i === 5 }
+  })
+  const trendMax = Math.max(...trend.map((t) => t.value), 1)
+  const trendTotal = trend.reduce((s, t) => s + t.value, 0)
+  const statusCounts = Object.fromEntries(invoiceStatusCounts.map((g) => [g.status, g._count._all])) as Record<string, number>
+  const invoiceTotal = Object.values(statusCounts).reduce((s, n) => s + n, 0)
 
   const incomeCards = [
     { label: 'Income Today', value: income.today, hint: 'Since midnight', icon: Wallet, gradient: 'from-cyan-400 via-sky-500 to-blue-600', glow: 'shadow-sky-500/30' },
@@ -346,6 +370,77 @@ export default async function MaskaniPage({ searchParams }: { searchParams: Prom
                 )
               })}
             </div>
+
+            <section className="mb-8">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-900 dark:text-white"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500/20 to-indigo-500/20"><TrendingUp className="h-5 w-5 text-sky-600 dark:text-sky-300" /></span> Portfolio Insights</h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Collection trend, occupancy, and invoice health at a glance</p>
+                </div>
+                <span className="rounded-full bg-sky-500/15 px-3 py-1 text-xs font-medium text-sky-700 dark:text-sky-300">Last 6 months</span>
+              </div>
+              <div className="grid gap-5 xl:grid-cols-3">
+                <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-6 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/5 xl:col-span-2">
+                  <div className="mb-5 flex items-center justify-between">
+                    <div>
+                      <p className="font-semibold text-slate-900 dark:text-white">Collections</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Rent payments received per month</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xl font-bold text-slate-900 dark:text-white">{formatCurrency(trendTotal, currency)}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">6-month total</p>
+                    </div>
+                  </div>
+                  <div className="flex h-40 items-end gap-3">
+                    {trend.map((t, idx) => (
+                      <div key={idx} className="flex flex-1 flex-col items-center gap-2">
+                        <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">{t.value > 0 ? formatCurrency(t.value, currency) : ''}</span>
+                        <div
+                          className={`w-full rounded-t-lg transition ${t.current ? 'bg-gradient-to-t from-emerald-500 to-cyan-400 shadow-lg shadow-emerald-500/30' : 'bg-slate-300/70 dark:bg-white/10'}`}
+                          style={{ height: `${Math.max(4, (t.value / trendMax) * 100)}%` }}
+                          title={`${t.label}: ${formatCurrency(t.value, currency)}`}
+                        />
+                        <span className={`text-xs font-medium ${t.current ? 'text-emerald-600 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}`}>{t.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-5">
+                  <Link href={`/maskani/properties${orgQuery}`} className="rounded-2xl border border-slate-200/80 bg-white/70 p-5 shadow-sm backdrop-blur-xl transition hover:shadow-md dark:border-white/10 dark:bg-white/5">
+                    <div className="flex items-center gap-5">
+                      <div className="relative h-20 w-20 shrink-0">
+                        <div className="absolute inset-0 rounded-full" style={{ background: `conic-gradient(#10b981 ${occupancy}%, rgb(148 163 184 / 0.25) ${occupancy}% 100%)` }} />
+                        <div className="absolute inset-2 flex items-center justify-center rounded-full bg-white text-lg font-bold text-slate-900 dark:bg-slate-900 dark:text-white">{occupancy}%</div>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-slate-900 dark:text-white">Occupancy</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">{occupiedUnits} occupied · {vacantUnits} vacant</p>
+                        <p className="mt-1 text-xs font-medium text-emerald-600 dark:text-emerald-300">of {c.units} units</p>
+                      </div>
+                    </div>
+                  </Link>
+
+                  <Link href={`/maskani/invoices${orgQuery}`} className="rounded-2xl border border-slate-200/80 bg-white/70 p-5 shadow-sm backdrop-blur-xl transition hover:shadow-md dark:border-white/10 dark:bg-white/5">
+                    <p className="mb-3 font-semibold text-slate-900 dark:text-white">Invoice health</p>
+                    <div className="space-y-2 text-sm">
+                      {([
+                        ['paid', 'Paid', 'bg-emerald-500'],
+                        ['unpaid', 'Unpaid', 'bg-orange-500'],
+                        ['partial', 'Partial', 'bg-amber-500'],
+                        ['overdue', 'Overdue', 'bg-rose-500'],
+                      ] as const).map(([key, label, dot]) => (
+                        <div key={key} className="flex items-center justify-between">
+                          <span className="flex items-center gap-2 text-slate-600 dark:text-slate-300"><span className={`h-2.5 w-2.5 rounded-full ${dot}`} />{label}</span>
+                          <span className="font-semibold text-slate-900 dark:text-white">{statusCounts[key] ?? 0}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">{invoiceTotal} invoice{invoiceTotal === 1 ? '' : 's'} total</p>
+                  </Link>
+                </div>
+              </div>
+            </section>
 
             <div className="mb-8 grid grid-cols-1 gap-6 xl:grid-cols-2">
               <section className="rounded-2xl border border-rose-200/70 bg-gradient-to-br from-rose-500/10 via-white/70 to-white/70 p-6 shadow-sm backdrop-blur-xl dark:border-rose-500/20 dark:from-rose-500/10 dark:via-slate-900/60 dark:to-slate-900/60">
