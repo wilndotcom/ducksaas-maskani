@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Sparkles, ArrowLeft, CreditCard, Plus, X, Receipt, Wallet } from 'lucide-react'
 import { formatCurrency } from '@/lib/currency'
 import { createInvoice, recordPayment } from './actions'
+import { MobileNav } from '@/components/mobile-nav'
 
 type Payment = { id: string; amount: number; method: string; reference: string | null; paidAt: string }
 type Invoice = { id: string; invoiceNumber: string; billingMonth: string; amountDue: number; amountPaid: number; waterAmount: number; dueDate: string; status: 'unpaid' | 'partial' | 'paid' | 'overdue'; tenantName: string; tenantEmail: string; unitLabel: string; payments: Payment[] }
@@ -57,6 +58,7 @@ export function InvoicesManager({ organization, orgQuery, roleLabel, invoices, l
           <div className="mt-6 border-t border-slate-200 pt-6 dark:border-white/10"><a href="/auth/signout" className="block rounded-xl px-4 py-2.5 text-sm font-medium text-rose-600 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-500/10">Sign Out</a></div>
         </aside>
         <main className="flex-1 p-6 lg:p-10">
+          <MobileNav items={nav} title={organization.name} />
           <div className="mx-auto max-w-7xl">
             <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
               <div>

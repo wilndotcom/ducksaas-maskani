@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Building2, Home, Plus, Pencil, Trash2, X, Sparkles, ArrowLeft, MapPin, Layers } from 'lucide-react'
 import { formatCurrency } from '@/lib/currency'
 import { createProperty, updateProperty, deleteProperty, createUnit, updateUnit, deleteUnit } from './actions'
+import { MobileNav } from '@/components/mobile-nav'
 
 type Unit = {
   id: string
@@ -112,6 +113,7 @@ export function PropertiesManager({
         </aside>
 
         <main className="flex-1 p-6 lg:p-10">
+          <MobileNav items={nav} title={organization.name} />
           <div className="mx-auto max-w-7xl">
             <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
               <div>

@@ -59,7 +59,8 @@ export default async function PortalStatement() {
           <p className="py-10 text-center text-sm text-slate-500 dark:text-slate-400">No payments recorded yet.</p>
         ) : (
           <>
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] text-sm">
               <thead>
                 <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500 dark:border-white/10 dark:text-slate-400">
                   <th className="pb-2 pr-4">Date</th>
@@ -92,6 +93,7 @@ export default async function PortalStatement() {
                 </tr>
               </tfoot>
             </table>
+            </div>
             <p className="mt-6 text-xs text-slate-400">This statement reflects payments recorded in the system. It is not a fiscal receipt. Contact {org.name} for official receipts.</p>
           </>
         )}

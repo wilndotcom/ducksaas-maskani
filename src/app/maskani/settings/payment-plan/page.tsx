@@ -5,6 +5,7 @@ import { formatCurrency, getSavedCurrency } from '@/lib/currency'
 import Link from 'next/link'
 import { Sparkles, ArrowLeft, Settings, CreditCard, Building2, Users, Shield } from 'lucide-react'
 import { PlanPicker } from './plan-picker'
+import { MobileNav } from '@/components/mobile-nav'
 
 export const instant = false
 
@@ -56,6 +57,7 @@ export default async function MaskaniPaymentPlanPage({ searchParams }: { searchP
           <div className="mt-6 border-t border-slate-200 pt-6 dark:border-white/10"><a href="/auth/signout" className="block rounded-xl px-4 py-2.5 text-sm font-medium text-rose-600 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-500/10">Sign Out</a></div>
         </aside>
         <main className="flex-1 p-6 lg:p-10">
+          <MobileNav items={nav} title={org.name} />
           <div className="mx-auto max-w-6xl">
             <div className="mb-8">
               <div className="mb-3 flex flex-wrap items-center gap-3 text-sm font-medium text-slate-600 dark:text-slate-300">

@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
 import { Sparkles, Home, FileText, Wrench, MessageSquareWarning, Receipt } from 'lucide-react'
+import { MobileNav } from '@/components/mobile-nav'
 
 export const instant = false
 
@@ -57,6 +58,7 @@ export default async function PortalLayout({ children }: { children: React.React
           </div>
         </aside>
         <main className="flex-1 p-6 lg:p-10">
+          <MobileNav items={nav} title={membership?.organization.name || 'Tenant Portal'} />
           <div className="mx-auto max-w-5xl">{children}</div>
         </main>
       </div>

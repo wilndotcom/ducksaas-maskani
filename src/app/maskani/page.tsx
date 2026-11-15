@@ -29,6 +29,7 @@ import {
   Clock,
   TrendingUp,
 } from 'lucide-react'
+import { MobileNav } from '@/components/mobile-nav'
 
 export const instant = false
 
@@ -247,6 +248,7 @@ export default async function MaskaniPage({ searchParams }: { searchParams: Prom
         </aside>
 
         <main className="flex-1 p-6 lg:p-10">
+          <MobileNav items={nav} title={org.name} />
           <div className="mx-auto max-w-7xl">
             <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
               <div>

@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { MessageSquareWarning, Sparkles, ArrowLeft, Plus, AlertCircle, Clock3, CheckCircle2 } from 'lucide-react'
 import { syncOrganizationSubscription } from '@/lib/subscription-enforcement'
 import { createComplaint, updateComplaintStatus } from './actions'
+import { MobileNav } from '@/components/mobile-nav'
 
 export const instant = false
 
@@ -99,6 +100,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
         </aside>
 
         <main className="flex-1 p-6 lg:p-10">
+          <MobileNav items={nav} title={org.name} />
           <div className="mx-auto max-w-6xl">
             <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
               <div>
