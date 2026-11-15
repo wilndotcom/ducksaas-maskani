@@ -9,6 +9,7 @@ import { getTenantHost } from '@/lib/tenant-domain'
 import { syncOrganizationSubscription } from '@/lib/subscription-enforcement'
 import { pickActiveMembership } from '@/lib/maskani'
 import { OrgSwitcher } from './org-switcher'
+import { CollectionChart, OccupancyDonut } from './insights-charts'
 import { formatCurrency, getSavedCurrency } from '@/lib/currency'
 import Link from 'next/link'
 import {
@@ -212,16 +213,15 @@ export default async function MaskaniPage({ searchParams }: { searchParams: Prom
     const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1)
     return { label: format(d, 'MMM'), value: paymentBuckets.get(`${d.getFullYear()}-${d.getMonth()}`) ?? 0, current: i === 5 }
   })
-  const trendMax = Math.max(...trend.map((t) => t.value), 1)
   const trendTotal = trend.reduce((s, t) => s + t.value, 0)
   const statusCounts = Object.fromEntries(invoiceStatusCounts.map((g) => [g.status, g._count._all])) as Record<string, number>
   const invoiceTotal = Object.values(statusCounts).reduce((s, n) => s + n, 0)
 
   const incomeCards = [
-    { label: 'Income Today', value: income.today, hint: 'Since midnight', icon: Wallet, gradient: 'from-cyan-400 via-sky-500 to-blue-600', glow: 'shadow-sky-500/30' },
-    { label: 'Income This Week', value: income.week, hint: 'Week to date', icon: CalendarDays, gradient: 'from-fuchsia-500 via-pink-500 to-rose-500', glow: 'shadow-pink-500/30' },
-    { label: 'Income This Month', value: income.month, hint: 'Month to date', icon: CalendarRange, gradient: 'from-violet-500 via-purple-500 to-indigo-600', glow: 'shadow-violet-500/30' },
-    { label: 'Income This Year', value: income.year, hint: 'Year to date', icon: Calendar, gradient: 'from-amber-400 via-orange-500 to-rose-500', glow: 'shadow-orange-500/30' },
+    { label: 'Income Today', value: income.today, hint: 'Since midnight', icon: Wallet, gradient: 'from-cyan-500 via-sky-600 to-blue-700', glow: 'shadow-sky-500/40' },
+    { label: 'Income This Week', value: income.week, hint: 'Week to date', icon: CalendarDays, gradient: 'from-fuchsia-600 via-pink-600 to-rose-600', glow: 'shadow-pink-500/40' },
+    { label: 'Income This Month', value: income.month, hint: 'Month to date', icon: CalendarRange, gradient: 'from-violet-600 via-purple-600 to-indigo-700', glow: 'shadow-violet-500/40' },
+    { label: 'Income This Year', value: income.year, hint: 'Year to date', icon: Calendar, gradient: 'from-amber-500 via-orange-600 to-red-600', glow: 'shadow-orange-500/40' },
   ]
 
   const orgQuery = orgParam && session.user.globalRole === 'super_admin' ? `?org=${org.id}` : ''
@@ -391,28 +391,13 @@ export default async function MaskaniPage({ searchParams }: { searchParams: Prom
                       <p className="text-xs text-slate-500 dark:text-slate-400">6-month total</p>
                     </div>
                   </div>
-                  <div className="flex h-40 items-end gap-3">
-                    {trend.map((t, idx) => (
-                      <div key={idx} className="flex flex-1 flex-col items-center gap-2">
-                        <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">{t.value > 0 ? formatCurrency(t.value, currency) : ''}</span>
-                        <div
-                          className={`w-full rounded-t-lg transition ${t.current ? 'bg-gradient-to-t from-emerald-500 to-cyan-400 shadow-lg shadow-emerald-500/30' : 'bg-slate-300/70 dark:bg-white/10'}`}
-                          style={{ height: `${Math.max(4, (t.value / trendMax) * 100)}%` }}
-                          title={`${t.label}: ${formatCurrency(t.value, currency)}`}
-                        />
-                        <span className={`text-xs font-medium ${t.current ? 'text-emerald-600 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}`}>{t.label}</span>
-                      </div>
-                    ))}
-                  </div>
+                  <CollectionChart data={trend} currency={currency} />
                 </div>
 
                 <div className="flex flex-col gap-5">
                   <Link href={`/maskani/properties${orgQuery}`} className="rounded-2xl border border-slate-200/80 bg-white/70 p-5 shadow-sm backdrop-blur-xl transition hover:shadow-md dark:border-white/10 dark:bg-white/5">
                     <div className="flex items-center gap-5">
-                      <div className="relative h-20 w-20 shrink-0">
-                        <div className="absolute inset-0 rounded-full" style={{ background: `conic-gradient(#10b981 ${occupancy}%, rgb(148 163 184 / 0.25) ${occupancy}% 100%)` }} />
-                        <div className="absolute inset-2 flex items-center justify-center rounded-full bg-white text-lg font-bold text-slate-900 dark:bg-slate-900 dark:text-white">{occupancy}%</div>
-                      </div>
+                      <OccupancyDonut occupied={occupiedUnits} vacant={vacantUnits} total={c.units} />
                       <div>
                         <p className="font-semibold text-slate-900 dark:text-white">Occupancy</p>
                         <p className="text-xs text-slate-500 dark:text-slate-400">{occupiedUnits} occupied · {vacantUnits} vacant</p>
