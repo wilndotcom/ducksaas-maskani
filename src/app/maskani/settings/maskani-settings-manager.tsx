@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
 import {
   Sparkles, ArrowLeft, Settings, Building2, Users, CreditCard, Wallet, Bell,
-  Palette, Wrench, ChevronRight, Save, CheckCircle2, Moon, Sun, Monitor,
+  Palette, Wrench, ChevronRight, Save, CheckCircle2, Moon, Sun, Monitor, SunMoon,
   CalendarClock, AlertTriangle, BadgeDollarSign, Gauge, Workflow, UserCog,
   ReceiptText, MessageSquareWarning, ExternalLink, Zap, Shield, UserPlus, Trash2
 } from 'lucide-react'
@@ -99,7 +99,7 @@ export function MaskaniSettingsManager({ organization, orgQuery, roleLabel, stat
   const init = useMemo(() => mergeSettings(initialSettings, organization.name), [initialSettings, organization.name])
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState<string | null>(null)
-  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system')
+  const [theme, setTheme] = useState<'light' | 'dark' | 'system' | 'auto'>('system')
 
   const [general, setGeneral] = useState(init.general)
   const [branding, setBranding] = useState(init.branding)
@@ -132,7 +132,7 @@ export function MaskaniSettingsManager({ organization, orgQuery, roleLabel, stat
     let id: number | undefined
     try {
       const t = localStorage.getItem('theme')
-      const resolved = t === 'dark' ? 'dark' : t === 'light' ? 'light' : 'system'
+      const resolved = t === 'dark' || t === 'light' || t === 'auto' ? t : 'system'
       id = window.setTimeout(() => setTheme(resolved), 0)
     } catch {}
     return () => { if (id !== undefined) window.clearTimeout(id) }
@@ -142,11 +142,16 @@ export function MaskaniSettingsManager({ organization, orgQuery, roleLabel, stat
     try { document.cookie = `ducksaas_currency=${encodeURIComponent(init.general.currency)}; path=/; max-age=31536000; samesite=lax` } catch {}
   }, [init.general.currency])
 
-  const applyTheme = (t: 'light' | 'dark' | 'system') => {
+  const applyTheme = (t: 'light' | 'dark' | 'system' | 'auto') => {
     setTheme(t)
     try {
-      if (t === 'system') { localStorage.removeItem('theme'); document.documentElement.classList.toggle('dark', window.matchMedia('(prefers-color-scheme: dark)').matches) }
-      else { localStorage.setItem('theme', t); document.documentElement.classList.toggle('dark', t === 'dark') }
+      if (t === 'system') localStorage.removeItem('theme')
+      else localStorage.setItem('theme', t)
+      const osDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+      const h = new Date().getHours()
+      const night = h >= 19 || h < 6
+      const dark = t === 'dark' || (t === 'auto' && (osDark || night)) || (t === 'system' && osDark)
+      document.documentElement.classList.toggle('dark', dark)
     } catch {}
   }
 
@@ -283,8 +288,8 @@ export function MaskaniSettingsManager({ organization, orgQuery, roleLabel, stat
 
                 <Section id="appearance" icon={Palette} title="Appearance & Portal Experience" desc="Theme and landlord portal presentation preferences." color="bg-gradient-to-br from-fuchsia-500 to-pink-600">
                   <p className="mb-3 text-sm font-medium text-slate-800 dark:text-slate-200">Theme (browser preference)</p>
-                  <div className="mb-4 grid gap-3 sm:grid-cols-3">
-                    {([{ v: 'light', label: 'Light', icon: Sun }, { v: 'dark', label: 'Dark', icon: Moon }, { v: 'system', label: 'System', icon: Monitor }] as const).map((opt) => {
+                  <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    {([{ v: 'light', label: 'Light', icon: Sun }, { v: 'dark', label: 'Dark', icon: Moon }, { v: 'system', label: 'System', icon: Monitor }, { v: 'auto', label: 'Auto', icon: SunMoon }] as const).map((opt) => {
                       const Icon = opt.icon; const active = theme === opt.v
                       return <button key={opt.v} onClick={() => { applyTheme(opt.v); flash('Theme updated') }} className={`flex items-center gap-3 rounded-xl border p-4 text-left transition ${active ? 'border-fuchsia-500 bg-fuchsia-500/10 ring-1 ring-fuchsia-500/30' : 'border-slate-200 bg-white/60 hover:border-slate-300 dark:border-white/10 dark:bg-slate-900/40 dark:hover:border-white/20'}`}><Icon className={`h-5 w-5 ${active ? 'text-fuchsia-600 dark:text-fuchsia-300' : 'text-slate-500'}`} /><span className="font-medium text-slate-900 dark:text-white">{opt.label}</span></button>
                     })}

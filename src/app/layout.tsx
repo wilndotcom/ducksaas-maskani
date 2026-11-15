@@ -28,7 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-full flex flex-col">
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('theme');var d=t?t==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;if(d)document.documentElement.classList.add('dark');else document.documentElement.classList.remove('dark')}catch(e){}})()`,
+            __html: `(function(){try{var t=localStorage.getItem('theme');var os=window.matchMedia('(prefers-color-scheme: dark)').matches;var h=new Date().getHours();var night=h>=19||h<6;var d=t==='dark'||(t==='auto'&&(os||night))||((!t||t==='system')&&os);if(d)document.documentElement.classList.add('dark');else document.documentElement.classList.remove('dark')}catch(e){}})()`,
           }}
         />
         {children}
