@@ -1,6 +1,30 @@
 # ducksaas-maskani
 
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+A multi-tenant SaaS platform for property management, combining a super-admin console (**DuckSaaS**) with a tenant-facing property management app (**Maskani**).
+
+## About
+
+**DuckSaaS** is the platform admin panel where the operator manages organizations (tenants), subscription plans, revenue, and platform logs.
+
+**Maskani** is the product each organization gets — a property management system for landlords and property managers featuring:
+
+- **Properties & Units** — manage buildings, units, and occupancy
+- **Tenants** — tenant records, leases, and rent tracking
+- **Invoices** — rent invoicing with M-Pesa and Paystack payment webhooks
+- **Maintenance** — maintenance request tracking
+- **Complaints** — tenant complaint handling
+- **Subscription enforcement** — plans, billing, and suspended-account handling
+- **Multi-tenancy** — organizations are isolated by domain/subdomain, with per-org settings and payment plans
+- **Notifications** — Telegram integration for alerts
+
+## Stack
+
+- **Next.js** (App Router) + TypeScript + Tailwind CSS
+- **NextAuth** for authentication
+- **Prisma** ORM with PostgreSQL
+- **Docker** + `docker-compose` for deployment
+
+## Getting Started
 
 ## Getting Started
 
