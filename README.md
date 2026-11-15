@@ -2,6 +2,8 @@
 
 A multi-tenant SaaS platform for property management, combining a super-admin console (**DuckSaaS**) with a tenant-facing property management app (**Maskani**).
 
+> **Status: early development.** This project is **not yet production-ready**. Core scaffolding, auth, data model, and billing logic exist, but payment gateway integrations are normalized stubs, there are no database migrations yet, and several production concerns (email, file uploads, tenant portal, hardened deployment) are still pending.
+
 ## About
 
 **DuckSaaS** is the platform admin panel where the operator manages organizations (tenants), subscription plans, revenue, and platform logs.
