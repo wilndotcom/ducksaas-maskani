@@ -107,6 +107,7 @@ async function main() {
     data: {
       name: 'John Kamau',
       email: 'john@landlord1.com',
+      username: 'landlord1',
       passwordHash: landlord1Password,
       globalRole: 'standard',
       phone: '+254711111111'
@@ -195,6 +196,7 @@ async function main() {
     data: {
       name: 'Mary Wanjiku',
       email: 'mary@tenant.com',
+      username: 'tenant1',
       passwordHash: tenant1Password,
       globalRole: 'standard',
       phone: '+254722222222'
@@ -269,6 +271,7 @@ async function main() {
     data: {
       name: 'Sarah Ochieng',
       email: 'sarah@landlord2.com',
+      username: 'landlord2',
       passwordHash: landlord2Password,
       globalRole: 'standard',
       phone: '+254733333333'

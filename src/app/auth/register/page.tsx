@@ -62,6 +62,10 @@ export default function RegisterPage() {
                   <input name="ownerName" required className={inputCls} placeholder="Jane Doe" />
                 </div>
                 <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-200">Username</label>
+                  <input name="username" className={inputCls} placeholder="jane_doe (optional)" />
+                </div>
+                <div>
                   <label className="mb-1 block text-sm font-medium text-slate-200">Email *</label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />

@@ -78,7 +78,7 @@ export function SignInForm() {
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
                 <label htmlFor="email" className="mb-1 block text-sm font-medium text-slate-200">
-                  Email
+                  Username or Email
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -89,7 +89,7 @@ export function SignInForm() {
                     onChange={(e) => setEmail(e.target.value)}
                     required
                     className={inputCls}
-                    placeholder="you@example.com"
+                    placeholder="username or you@example.com"
                   />
                 </div>
               </div>
@@ -131,8 +131,8 @@ export function SignInForm() {
               <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
                 <p className="mb-2 text-center text-sm font-medium text-slate-200">Demo credentials</p>
                 <div className="space-y-1.5 text-xs text-slate-400">
-                  <p><span className="text-cyan-300">Landlord:</span> john@landlord1.com / landlord123</p>
-                  <p><span className="text-emerald-300">Tenant:</span> mary@tenant.com / tenant123</p>
+                  <p><span className="text-cyan-300">Landlord:</span> landlord1 / landlord123</p>
+                  <p><span className="text-emerald-300">Tenant:</span> tenant1 / tenant123</p>
                 </div>
               </div>
               <p className="mt-3 text-center text-xs text-slate-400">

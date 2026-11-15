@@ -20,6 +20,7 @@ export type RegisterState = { ok?: boolean; error?: string }
 export async function registerOrganization(_prev: RegisterState, formData: FormData): Promise<RegisterState> {
   try {
     const ownerName = String(formData.get('ownerName') || '').trim()
+    const username = String(formData.get('username') || '').trim().toLowerCase()
     const email = String(formData.get('email') || '').trim().toLowerCase()
     const phone = String(formData.get('phone') || '').trim()
     const password = String(formData.get('password') || '')
@@ -44,6 +45,16 @@ export async function registerOrganization(_prev: RegisterState, formData: FormD
       return { error: 'Organization subdomain is required.' }
     }
 
+    if (username && !/^[a-z0-9._-]{3,30}$/.test(username)) {
+      return { error: 'Username must be 3-30 characters (letters, numbers, dot, dash, underscore).' }
+    }
+    if (username) {
+      const taken = await prisma.user.findUnique({ where: { username } })
+      if (taken) {
+        return { error: 'This username is already taken. Please choose another.' }
+      }
+    }
+
     const existingUser = await prisma.user.findUnique({ where: { email } })
     if (existingUser) {
       return { error: 'An account with this email already exists. Please sign in instead.' }
@@ -60,6 +71,7 @@ export async function registerOrganization(_prev: RegisterState, formData: FormD
         data: {
           name: ownerName,
           email,
+          username: username || null,
           phone: phone || null,
           passwordHash,
           globalRole: 'standard',
