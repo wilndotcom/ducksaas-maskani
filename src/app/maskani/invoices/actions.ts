@@ -126,6 +126,10 @@ export async function recordPayment(formData: FormData) {
       where: { id: invoice.id },
       data: { amountPaid: newPaid, status: invoiceStatus(invoice.amountDue, newPaid, invoice.dueDate) },
     })
+    await tx.paymentSession.updateMany({
+      where: { invoiceId: invoice.id, status: 'pending' },
+      data: { status: 'success' },
+    })
   })
 
   const [tenant, org] = await Promise.all([

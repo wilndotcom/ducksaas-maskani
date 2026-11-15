@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react'
 import { tenantPayInvoice } from '../actions'
 import type { PaymentGatewayProvider } from '@prisma/client'
 
-type Provider = { provider: PaymentGatewayProvider; accountNumber: string; isMpesa: boolean }
+type Provider = { provider: PaymentGatewayProvider; accountNumber: string; bankName?: string | null; accountName?: string | null; isMpesa: boolean }
 
 export function InvoicesPayClient({ invoiceId, invoiceNumber, balance, providers }: { invoiceId: string; invoiceNumber: string; balance: number; providers: Provider[] }) {
   const [pending, startTransition] = useTransition()
@@ -60,6 +60,18 @@ export function InvoicesPayClient({ invoiceId, invoiceNumber, balance, providers
               placeholder="07XX XXX XXX"
               className="w-40 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-slate-900/60 dark:text-white"
             />
+          </div>
+        )}
+        {selected?.provider === 'bank_transfer' && (
+          <div className="w-full rounded-xl border border-sky-200/70 bg-sky-500/10 p-3 text-sm dark:border-sky-500/20">
+            <p className="font-semibold text-sky-800 dark:text-sky-200">Pay directly to the landlord&apos;s account</p>
+            <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-slate-700 dark:text-slate-200 sm:grid-cols-4">
+              {selected.bankName && <><dt className="text-xs text-slate-500">Bank</dt><dd className="font-medium">{selected.bankName}</dd></>}
+              {selected.accountName && <><dt className="text-xs text-slate-500">Account name</dt><dd className="font-medium">{selected.accountName}</dd></>}
+              <dt className="text-xs text-slate-500">Account number</dt><dd className="font-medium">{selected.accountNumber}</dd>
+              <dt className="text-xs text-slate-500">Reference</dt><dd className="font-medium">{invoiceNumber}</dd>
+            </dl>
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Use the invoice number as the payment reference. Your landlord will confirm receipt and mark the invoice paid.</p>
           </div>
         )}
         <button

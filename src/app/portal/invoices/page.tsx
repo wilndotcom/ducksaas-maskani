@@ -30,11 +30,17 @@ export default async function PortalInvoices() {
     }),
   ])
 
-  const providers = gateways.map((g) => ({
-    provider: g.provider,
-    accountNumber: g.accountNumber,
-    isMpesa: g.provider === 'mpesa_paybill' || g.provider === 'mpesa_till',
-  }))
+  const providers = gateways.map((g) => {
+    const creds = (g.apiCredentialsEncrypted && typeof g.apiCredentialsEncrypted === 'object' && !Array.isArray(g.apiCredentialsEncrypted))
+      ? g.apiCredentialsEncrypted as Record<string, unknown> : {}
+    return {
+      provider: g.provider,
+      accountNumber: g.accountNumber,
+      bankName: typeof creds.bankName === 'string' ? creds.bankName : null,
+      accountName: typeof creds.accountName === 'string' ? creds.accountName : null,
+      isMpesa: g.provider === 'mpesa_paybill' || g.provider === 'mpesa_till',
+    }
+  })
   const pendingInvoiceIds = new Set(pendingSessions.map((s) => s.invoiceId))
 
   return (
