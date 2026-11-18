@@ -4,7 +4,7 @@ import { formatCurrency, getSavedCurrency } from '@/lib/currency'
 import { cookies } from 'next/headers'
 import { startOfMonth } from 'date-fns'
 import Link from 'next/link'
-import { Wallet, FileText, Wrench, Home, ArrowRight, AlertCircle } from 'lucide-react'
+import { Wallet, FileText, Wrench, Home, ArrowRight, AlertCircle, FileSignature, ShieldCheck } from 'lucide-react'
 import { StatusBadge } from '@/components/status-badge'
 
 export const instant = false
@@ -14,7 +14,7 @@ export default async function PortalDashboard() {
   const cookieStore = await cookies()
   const currency = getSavedCurrency(cookieStore.get('ducksaas_currency')?.value)
 
-  const [allInvoices, openTickets, paidThisMonth] = await Promise.all([
+  const [allInvoices, openTickets, openComplaints, paidThisMonth, activeLease] = await Promise.all([
     prisma.invoice.findMany({
       where: { organizationId: org.id, tenantUserId: session.user.id },
       orderBy: { dueDate: 'asc' },
@@ -23,9 +23,24 @@ export default async function PortalDashboard() {
     prisma.maintenanceTicket.count({
       where: { organizationId: org.id, tenantUserId: session.user.id, status: { in: ['open', 'in_progress'] } },
     }),
+    prisma.complaint.count({
+      where: { organizationId: org.id, tenantUserId: session.user.id, status: { in: ['open', 'in_progress'] } },
+    }),
     prisma.rentPayment.aggregate({
       _sum: { amount: true },
       where: { organizationId: org.id, tenantUserId: session.user.id, paidAt: { gte: startOfMonth(new Date()) } },
+    }),
+    prisma.lease.findFirst({
+      where: { organizationId: org.id, tenantUserId: session.user.id, status: 'active' },
+      orderBy: { startDate: 'desc' },
+      include: {
+        unit: {
+          select: {
+            unitNumber: true, monthlyRent: true, depositAmount: true,
+            property: { select: { name: true, location: true } },
+          },
+        },
+      },
     }),
   ])
 
@@ -35,9 +50,10 @@ export default async function PortalDashboard() {
     .reduce((s, i) => s + (i.amountDue - i.amountPaid), 0)
   const overdueCount = allInvoices.filter((i) => i.status === 'overdue' || (i.status !== 'paid' && i.dueDate < new Date())).length
 
+  const openRequests = openTickets + openComplaints
   const cards = [
     { label: 'Outstanding Balance', value: totalOutstanding, icon: Wallet, tone: 'from-rose-500 to-orange-500', hint: `${overdueCount} overdue` },
-    { label: 'Open Requests', value: openTickets, icon: Wrench, tone: 'from-amber-500 to-yellow-500', hint: 'Maintenance & complaints' },
+    { label: 'Open Requests', value: openRequests, icon: Wrench, tone: 'from-amber-500 to-yellow-500', hint: `${openTickets} maintenance · ${openComplaints} complaints` },
     { label: 'Paid This Month', value: paidThisMonth._sum.amount ?? 0, icon: FileText, tone: 'from-emerald-500 to-teal-500', hint: 'Rent payments' },
   ]
 
@@ -68,6 +84,27 @@ export default async function PortalDashboard() {
           )
         })}
       </div>
+
+      {activeLease && (
+        <div className="mb-8 rounded-2xl border border-slate-200/80 bg-white/70 p-6 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
+          <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold"><FileSignature className="h-5 w-5 text-violet-500" /> My Lease</h3>
+          <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+            <div><p className="text-xs uppercase tracking-wide text-slate-400">Unit</p><p className="font-medium">{activeLease.unit.property.name} · {activeLease.unit.unitNumber}</p></div>
+            <div><p className="text-xs uppercase tracking-wide text-slate-400">Monthly rent</p><p className="font-medium">{formatCurrency(activeLease.unit.monthlyRent, currency)}</p></div>
+            <div><p className="text-xs uppercase tracking-wide text-slate-400">Lease period</p><p className="font-medium">{activeLease.startDate.toLocaleDateString()} → {activeLease.endDate.toLocaleDateString()}</p></div>
+            <div><p className="text-xs uppercase tracking-wide text-slate-400">Billing day</p><p className="font-medium">Day {activeLease.billingDayOfMonth} monthly</p></div>
+            {activeLease.depositAmount > 0 && (
+              <div className="flex items-center gap-2 sm:col-span-2 lg:col-span-4">
+                <ShieldCheck className="h-4 w-4 text-amber-500" />
+                <p className="text-sm text-slate-600 dark:text-slate-300">
+                  Security deposit held: <strong>{formatCurrency(activeLease.depositAmount, currency)}</strong>
+                  <span className="ml-2 rounded-full bg-slate-500/10 px-2 py-0.5 text-[11px] font-semibold capitalize text-slate-600 dark:text-slate-300">{activeLease.depositStatus}</span>
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-6 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
         <div className="mb-4 flex items-center justify-between">

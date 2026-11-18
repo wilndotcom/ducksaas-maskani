@@ -10,6 +10,7 @@ import {
   TrendingUp,
   Puzzle,
   ScrollText,
+  Users,
   Settings,
   LogOut,
   Sparkles,
@@ -25,6 +26,7 @@ const nav = [
   { href: '/ducksaas/plans', label: 'Subscription Plans', icon: CreditCard },
   { href: '/ducksaas/revenue', label: 'Revenue', icon: TrendingUp },
   { href: '/ducksaas/features', label: 'Feature Modules', icon: Puzzle },
+  { href: '/ducksaas/users', label: 'Users', icon: Users },
   { href: '/ducksaas/logs', label: 'System Logs', icon: ScrollText },
   { href: '/ducksaas/settings', label: 'Settings', icon: Settings },
 ]

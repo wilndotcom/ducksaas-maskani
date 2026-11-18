@@ -530,3 +530,12 @@ model Notification {
   @@index([organizationId])
   @@map("notifications")
 }
+
+model PlatformSetting {
+  id        String   @id @default("app")
+  settings  Json
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("platform_settings")
+}

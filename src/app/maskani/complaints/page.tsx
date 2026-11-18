@@ -10,9 +10,9 @@ import { MobileNav } from '@/components/mobile-nav'
 
 export const instant = false
 
-export default async function ComplaintsPage({ searchParams }: { searchParams: Promise<{ org?: string }> }) {
+export default async function ComplaintsPage({ searchParams }: { searchParams: Promise<{ org?: string; q?: string; status?: string }> }) {
   const session = await getServerSession(authOptions)
-  const { org: orgParam } = await searchParams
+  const { org: orgParam, q, status: statusFilter } = await searchParams
 
   if (!session) redirect('/auth/signin')
 
@@ -42,7 +42,11 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
 
   const [complaints, units, tenants] = await Promise.all([
     prisma.complaint.findMany({
-      where: { organizationId: org.id },
+      where: {
+        organizationId: org.id,
+        ...(statusFilter && ['open', 'in_progress', 'resolved', 'closed'].includes(statusFilter) ? { status: statusFilter as 'open' | 'in_progress' | 'resolved' | 'closed' } : {}),
+        ...(q ? { OR: [{ subject: { contains: q, mode: 'insensitive' as const } }, { description: { contains: q, mode: 'insensitive' as const } }, { tenant: { name: { contains: q, mode: 'insensitive' as const } } }] } : {}),
+      },
       orderBy: { createdAt: 'desc' },
       take: 50,
       include: {
@@ -66,6 +70,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
     { href: `/maskani/maintenance${orgQuery}`, label: 'Maintenance' },
     { href: `/maskani/complaints${orgQuery}`, label: 'Complaints', active: true },
     { href: `/maskani/notifications${orgQuery}`, label: 'Notifications' },
+    { href: `/maskani/reports${orgQuery}`, label: 'Reports' },
     { href: `/maskani/settings${orgQuery}`, label: 'Settings' },
   ]
 
@@ -153,7 +158,21 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
             </div>
 
             <div className="rounded-3xl border border-slate-200/80 bg-white/70 p-6 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
-              <h3 className="mb-4 text-lg font-semibold">Recent Complaints</h3>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <h3 className="text-lg font-semibold">Recent Complaints</h3>
+                <form method="get" className="flex flex-wrap items-center gap-2">
+                  {orgParam && session.user.globalRole === 'super_admin' && <input type="hidden" name="org" value={orgParam} />}
+                  <input name="q" defaultValue={q || ''} placeholder="Search subject, tenant..." className="w-52 rounded-lg border border-slate-300/70 bg-white/80 px-3 py-1.5 text-sm dark:border-white/10 dark:bg-slate-900/60" />
+                  <select name="status" defaultValue={statusFilter || 'all'} className="rounded-lg border border-slate-300/70 bg-white/80 px-3 py-1.5 text-sm dark:border-white/10 dark:bg-slate-900/60">
+                    <option value="all">All statuses</option>
+                    <option value="open">Open</option>
+                    <option value="in_progress">In progress</option>
+                    <option value="resolved">Resolved</option>
+                    <option value="closed">Closed</option>
+                  </select>
+                  <button className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white dark:bg-white dark:text-slate-900">Filter</button>
+                </form>
+              </div>
               {complaints.length === 0 ? (
                 <p className="text-sm text-slate-600 dark:text-slate-400">No complaints recorded yet for <strong>{org.name}</strong>.</p>
               ) : (

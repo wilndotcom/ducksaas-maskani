@@ -18,6 +18,18 @@ export function MaintenanceManager({ organization, orgQuery, roleLabel, tickets,
   const run = (fn: () => Promise<void>, success: string, close?: () => void) => startTransition(async () => { try { await fn(); flash(success); close?.() } catch (e) { flash(e instanceof Error ? e.message : 'Action failed') } })
 
   const stats = useMemo(() => ({ total: tickets.length, open: tickets.filter((t) => t.status === 'open').length, inProgress: tickets.filter((t) => t.status === 'in_progress').length, resolved: tickets.filter((t) => t.status === 'resolved').length }), [tickets])
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [priorityFilter, setPriorityFilter] = useState('all')
+  const filteredTickets = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return tickets.filter((t) => {
+      if (statusFilter !== 'all' && t.status !== statusFilter) return false
+      if (priorityFilter !== 'all' && t.priority !== priorityFilter) return false
+      if (!q) return true
+      return [t.title, t.tenantName, t.tenantEmail, t.unitLabel, t.category].some((v) => v.toLowerCase().includes(q))
+    })
+  }, [tickets, search, statusFilter, priorityFilter])
 
   const nav = [
     { href: `/maskani${orgQuery}`, label: 'Dashboard' },
@@ -27,6 +39,7 @@ export function MaintenanceManager({ organization, orgQuery, roleLabel, tickets,
     { href: `/maskani/maintenance${orgQuery}`, label: 'Maintenance', active: true },
     { href: `/maskani/complaints${orgQuery}`, label: 'Complaints' },
     { href: `/maskani/notifications${orgQuery}`, label: 'Notifications' },
+    { href: `/maskani/reports${orgQuery}`, label: 'Reports' },
     { href: `/maskani/settings${orgQuery}`, label: 'Settings' },
   ]
 
@@ -84,12 +97,30 @@ export function MaintenanceManager({ organization, orgQuery, roleLabel, tickets,
             )}
 
             <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-6 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
-              <h3 className="mb-4 text-lg font-semibold">Tickets</h3>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <h3 className="text-lg font-semibold">Tickets</h3>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search tickets..." className="w-48 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm outline-none focus:border-amber-400 dark:border-white/10 dark:bg-slate-900/60 dark:text-white" />
+                  <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm outline-none dark:border-white/10 dark:bg-slate-900/60 dark:text-white">
+                    <option value="all">All statuses</option>
+                    <option value="open">Open</option>
+                    <option value="in_progress">In progress</option>
+                    <option value="resolved">Resolved</option>
+                  </select>
+                  <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm outline-none dark:border-white/10 dark:bg-slate-900/60 dark:text-white">
+                    <option value="all">All priorities</option>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                  </select>
+                </div>
+              </div>
               {tickets.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/70 p-8 text-center text-sm text-slate-600 dark:border-white/15 dark:bg-slate-900/30 dark:text-slate-300">No maintenance tickets yet for {organization.name}. Create one to track issues by unit, tenant, priority, and status.</div>
               ) : (
                 <div className="space-y-3">
-                  {tickets.map((t) => (
+                  {filteredTickets.length === 0 && <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">No tickets match your filters.</p>}
+                  {filteredTickets.map((t) => (
                     <div key={t.id} className="rounded-xl border border-slate-200/70 bg-white/60 p-4 dark:border-white/10 dark:bg-slate-900/40">
                       <div className="flex flex-wrap items-start justify-between gap-4">
                         <div className="min-w-0">

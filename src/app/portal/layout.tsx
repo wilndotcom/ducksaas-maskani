@@ -3,8 +3,10 @@ import { redirect } from 'next/navigation'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
-import { Sparkles, Home, FileText, Wrench, MessageSquareWarning, Receipt, Bell } from 'lucide-react'
+import { Sparkles, Home, FileText, Wrench, MessageSquareWarning, Receipt, Bell, User } from 'lucide-react'
 import { MobileNav } from '@/components/mobile-nav'
+import { pickActiveMembership } from '@/lib/maskani'
+import { PortalOrgSwitcher } from './org-switcher'
 
 export const instant = false
 
@@ -15,17 +17,19 @@ const nav = [
   { href: '/portal/maintenance', label: 'Maintenance', icon: Wrench },
   { href: '/portal/complaints', label: 'Complaints', icon: MessageSquareWarning },
   { href: '/portal/notifications', label: 'Notifications', icon: Bell },
+  { href: '/portal/profile', label: 'Profile', icon: User },
 ]
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions)
   if (!session) redirect('/auth/signin')
 
-  const membership = await prisma.organizationMember.findFirst({
+  const tenantMemberships = await prisma.organizationMember.findMany({
     where: { userId: session.user.id, role: 'tenant' },
-    include: { organization: { select: { name: true } } },
+    include: { organization: { select: { id: true, name: true } } },
     orderBy: { createdAt: 'asc' },
   })
+  const membership = await pickActiveMembership(session.user.id, tenantMemberships)
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-100 text-slate-900 transition-colors dark:bg-slate-950 dark:text-white">
@@ -60,7 +64,10 @@ export default async function PortalLayout({ children }: { children: React.React
         </aside>
         <main className="flex-1 p-6 lg:p-10">
           <MobileNav items={nav} title={membership?.organization.name || 'Tenant Portal'} />
-          <div className="mx-auto max-w-5xl">{children}</div>
+          <div className="mx-auto max-w-5xl">
+            {membership && <PortalOrgSwitcher orgs={tenantMemberships.map((m) => ({ id: m.organization.id, name: m.organization.name }))} activeId={membership.organization.id} />}
+            {children}
+          </div>
         </main>
       </div>
     </div>

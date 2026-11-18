@@ -60,6 +60,7 @@ export default async function NotificationsPage({ searchParams }: { searchParams
     { href: `/maskani/maintenance${orgQuery}`, label: 'Maintenance' },
     { href: `/maskani/complaints${orgQuery}`, label: 'Complaints' },
     { href: `/maskani/notifications${orgQuery}`, label: 'Notifications', active: true },
+    { href: `/maskani/reports${orgQuery}`, label: 'Reports' },
     { href: `/maskani/settings${orgQuery}`, label: 'Settings' },
   ]
 

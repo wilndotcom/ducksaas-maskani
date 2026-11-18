@@ -37,6 +37,7 @@ export default async function MaskaniPaymentPlanPage({ searchParams }: { searchP
     { href: `/maskani/maintenance${orgQuery}`, label: 'Maintenance' },
     { href: `/maskani/complaints${orgQuery}`, label: 'Complaints' },
     { href: `/maskani/notifications${orgQuery}`, label: 'Notifications' },
+    { href: `/maskani/reports${orgQuery}`, label: 'Reports' },
     { href: `/maskani/settings${orgQuery}`, label: 'Settings', active: true },
   ]
 

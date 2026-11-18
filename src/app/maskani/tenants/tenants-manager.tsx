@@ -34,6 +34,16 @@ export function TenantsManager({ organization, orgQuery, roleLabel, leases, unit
     return map
   }, [waterReadings])
   const unbilledTotal = useMemo(() => waterReadings.filter((r) => !r.billed).reduce((s, r) => s + r.amount, 0), [waterReadings])
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const filteredLeases = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return leases.filter((l) => {
+      if (statusFilter !== 'all' && l.status !== statusFilter) return false
+      if (!q) return true
+      return [l.tenantName, l.tenantEmail, l.unitLabel, l.startDate, l.endDate].some((v) => v.toLowerCase().includes(q))
+    })
+  }, [leases, search, statusFilter])
 
   const nav = [
     { href: `/maskani${orgQuery}`, label: 'Dashboard' },
@@ -43,6 +53,7 @@ export function TenantsManager({ organization, orgQuery, roleLabel, leases, unit
     { href: `/maskani/maintenance${orgQuery}`, label: 'Maintenance' },
     { href: `/maskani/complaints${orgQuery}`, label: 'Complaints' },
     { href: `/maskani/notifications${orgQuery}`, label: 'Notifications' },
+    { href: `/maskani/reports${orgQuery}`, label: 'Reports' },
     { href: `/maskani/settings${orgQuery}`, label: 'Settings' },
   ]
 
@@ -103,12 +114,23 @@ export function TenantsManager({ organization, orgQuery, roleLabel, leases, unit
 
             <div className="grid gap-6 xl:grid-cols-3">
               <div className="xl:col-span-2 rounded-2xl border border-slate-200/80 bg-white/70 p-6 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
-                <h3 className="mb-4 text-lg font-semibold">Leases</h3>
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <h3 className="text-lg font-semibold">Leases</h3>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search tenant, unit, dates..." className="w-56 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm outline-none focus:border-emerald-400 dark:border-white/10 dark:bg-slate-900/60 dark:text-white" />
+                    <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm outline-none dark:border-white/10 dark:bg-slate-900/60 dark:text-white">
+                      <option value="all">All statuses</option>
+                      <option value="active">Active</option>
+                      <option value="terminated">Terminated</option>
+                    </select>
+                  </div>
+                </div>
                 {leases.length === 0 ? (
                   <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/70 p-8 text-center text-sm text-slate-600 dark:border-white/15 dark:bg-slate-900/30 dark:text-slate-300">No leases yet. Add properties and units first, then create a lease — you can create the tenant&apos;s portal account at the same time.</div>
                 ) : (
                   <div className="space-y-3">
-                    {leases.map((l) => (
+                    {filteredLeases.length === 0 && <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">No leases match your search.</p>}
+                    {filteredLeases.map((l) => (
                       <div key={l.id} className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200/70 bg-white/60 p-4 dark:border-white/10 dark:bg-slate-900/40">
                         <div className="min-w-0">
                           <Link href={`/maskani/tenants/${l.tenantUserId}${orgQuery}`} className="font-semibold text-slate-900 hover:text-emerald-600 hover:underline dark:text-white dark:hover:text-emerald-300">{l.tenantName}</Link>

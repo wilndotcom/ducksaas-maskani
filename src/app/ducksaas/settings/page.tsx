@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { getPlatformSettings, savePlatformSettings } from './actions'
 import {
   Settings,
   Building2,
@@ -193,6 +194,20 @@ export default function SettingsPage() {
       }
       const t = localStorage.getItem('theme')
       setTheme(t === 'dark' ? 'dark' : t === 'light' ? 'light' : 'system')
+      // Server-side settings win over localStorage so config survives devices/cache clears
+      getPlatformSettings().then((server) => {
+        if (!server) return
+        const apply = (section: unknown, setter: (fn: (p: never) => never) => void) => {
+          if (section && typeof section === 'object') setter(((p: Record<string, unknown>) => ({ ...p, ...(section as Record<string, unknown>) })) as never)
+        }
+        apply(server.general, setGeneral as never)
+        apply(server.billing, setBilling as never)
+        apply(server.features, setFeatures as never)
+        apply(server.payments, setPayments as never)
+        apply(server.notify, setNotify as never)
+        apply(server.security, setSecurity as never)
+        apply(server.system, setSystem as never)
+      }).catch(() => {})
     } catch {}
     setLoaded(true)
     /* eslint-enable react-hooks/set-state-in-effect */
@@ -222,6 +237,7 @@ export default function SettingsPage() {
     const payload = { general, billing, features, payments, notify, security, system, updatedAt: new Date().toISOString() }
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
+      await savePlatformSettings(payload)
       document.cookie = `ducksaas_currency=${encodeURIComponent(general.defaultCurrency)}; path=/; max-age=31536000; samesite=lax`
       await new Promise((r) => setTimeout(r, 350))
       flash(msg)
