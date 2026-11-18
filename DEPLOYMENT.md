@@ -97,6 +97,12 @@ Everything else is optional and degrades gracefully.
 - `middleware.ts` uses the deprecated convention (works, migration pending)
 - `apiCredentialsEncrypted` stores gateway credentials as JSON — not yet
   encrypted at rest; protect the DB and `.env` accordingly
-- No audit-log model behind `/ducksaas/logs`
+- `/ducksaas/logs` is a live activity feed, not a persisted audit log —
+  there's no record of *who* performed admin actions
+- Feature flags on subscription plans are catalog metadata only — not yet
+  enforced inside Maskani pages
+- No PDF receipts (portal statement is print-friendly HTML)
+- Cron must be scheduled externally — nothing generates invoices until
+  `/api/cron/generate-invoices` is hit daily
 - Tenant subdomains (`slug.example.com`) need wildcard DNS if you use
   `NEXT_PUBLIC_ROOT_DOMAIN`

@@ -1,64 +1,89 @@
-# ducksaas-maskani
+# DuckSaaS + Maskani
 
-A multi-tenant SaaS platform for property management, combining a super-admin console (**DuckSaaS**) with a tenant-facing property management app (**Maskani**).
+A multi-tenant SaaS platform for property management: a super-admin console (**DuckSaaS**) that runs the platform, and a full property-management product (**Maskani**) that each landlord organization gets.
 
-> **Status: early development.** This project is **not yet production-ready**. Core scaffolding, auth, data model, and billing logic exist, but payment gateway integrations are normalized stubs, there are no database migrations yet, and several production concerns (email, file uploads, tenant portal, hardened deployment) are still pending.
+> **Status: early development — not yet production-ready.** The core flows work end-to-end (leases → invoices → payments → portal), but real payment credentials, email/SMTP, cron scheduling, and a production deployment still need to be configured before going live. See [DEPLOYMENT.md](./DEPLOYMENT.md).
 
-## About
+## The three portals
 
-**DuckSaaS** is the platform admin panel where the operator manages organizations (tenants), subscription plans, revenue, and platform logs.
+| Portal | Who | What it does |
+|---|---|---|
+| `/ducksaas` | Platform super-admin | Organizations, subscription plans, revenue, feature modules, system logs, user management, platform settings |
+| `/maskani` | Landlords, caretakers, admins | Properties & units, tenants & leases, rent invoicing, payments, maintenance, complaints, water billing, reports, notifications, settings |
+| `/portal` | Tenants | Invoices & payments (M-Pesa/Paystack/bank transfer to *their landlord's* accounts), maintenance requests, complaints, statements, water usage, notifications, profile |
 
-**Maskani** is the product each organization gets — a property management system for landlords and property managers featuring:
+Auth is split: `/auth/admin` for DuckSaaS super-admins, `/auth/signin` for everyone else (username or email).
 
-- **Properties & Units** — manage buildings, units, and occupancy
-- **Tenants** — tenant records, leases, and rent tracking
-- **Invoices** — rent invoicing with M-Pesa and Paystack payment webhooks
-- **Maintenance** — maintenance request tracking
-- **Complaints** — tenant complaint handling
-- **Subscription enforcement** — plans, billing, and suspended-account handling
-- **Multi-tenancy** — organizations are isolated by domain/subdomain, with per-org settings and payment plans
-- **Notifications** — Telegram integration for alerts
+## Feature highlights
+
+- **Leases drive everything** — `Property → Unit → Lease → Tenant → Invoices → Payments`. Active leases mark units occupied, create tenant portal accounts, and drive recurring billing.
+- **Per-unit pricing** — each unit has its own type (bedsitter/1br/2br…), rent, deposit, water rate, and recurring extra charges (internet, parking, retainers…).
+- **Billing cron** — `/api/cron/generate-invoices` generates invoices per lease billing day, with **missed-month catch-up** (backfills up to 12 months), mid-month **proration**, per-lease **water charges**, recurring unit charges, configurable **late fees**, and overdue marking + reminders.
+- **Per-tenant water billing** — meter readings are stamped to a lease, so a new tenant never inherits the previous tenant's consumption.
+- **Deposit lifecycle** — deposit invoice at move-in, difference-only billing on transfers, collect/refund/forfeit tracking.
+- **Landlord-owned payment collection** — each org configures its own M-Pesa Paybill/Till, Paystack, or bank account; tenants pay directly into the landlord's accounts. Platform M-Pesa/Paystack env credentials are only for SaaS subscription billing.
+- **In-app notifications** for both landlords and tenants (invoices, payments, tickets, complaints, overdue).
+- **Maintenance ↔ unit status** — high-priority/structural tickets flag units `maintenance`; resolving the last ticket restores occupancy.
+- **Tenant transfers** between units/properties with atomic lease swap and preserved history.
+- **Dashboard analytics** — KPI cards, collections chart, occupancy donut, invoice health, arrears attention strip.
+- **Reports** — collection summary, arrears aging, 6-month trend, rent roll by property.
+- **Appearance** — Light / Dark / System / **Auto** (OS-aware + night hours) with instant switching.
+- **Subscription enforcement** — trials, plans, grace periods, suspension.
 
 ## Stack
 
-- **Next.js** (App Router) + TypeScript + Tailwind CSS
-- **NextAuth** for authentication
-- **Prisma** ORM with PostgreSQL
-- **Docker** + `docker-compose` for deployment
+- **Next.js 16** (App Router, Cache Components) + React 19 + TypeScript + Tailwind CSS 4
+- **NextAuth** (credentials) · **Prisma 5** + PostgreSQL · **Recharts**
+- M-Pesa Daraja (STK/C2B), Paystack, SMTP email, Telegram alerts
+- Docker + docker-compose for self-hosting
 
-## Getting Started
-
-## Getting Started
-
-First, run the development server:
+## Getting started
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env        # fill in DATABASE_URL, NEXTAUTH_SECRET, etc.
+npm run db:push             # sync schema to your dev database
+npm run db:seed             # dev seed (WIPES the database — dev only!)
+npm run dev                 # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Demo accounts (after `db:seed`)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Login | Password | Portal |
+|---|---|---|
+| `admin` / seed admin email | `SEED_ADMIN_PASSWORD` env | `/auth/admin` → `/ducksaas` |
+| `landlord1` | `password123` | `/maskani` (Kamau Properties) |
+| `landlord2` | `password123` | `/maskani` (Ochieng Estates) |
+| `tenant2` / `tenant3` | `tenant123` | `/portal` |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Scripts
 
-## Learn More
+```bash
+npm run dev          # dev server
+npm run build        # production build
+npm run lint         # eslint
+npm run db:generate  # prisma client
+npm run db:push      # push schema (dev)
+npm run db:migrate   # create/apply migrations
+npm run db:seed      # dev seed — DESTRUCTIVE, requires SEED_CONFIRM=1
+npm run db:seed:prod # production seed — safe, idempotent (admin + plans + master org)
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Cron
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Invoice generation needs a daily hit to `/api/cron/generate-invoices` with `Authorization: Bearer $CRON_SECRET`. See [DEPLOYMENT.md](./DEPLOYMENT.md) for scheduling options.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Project layout
 
-## Deploy on Vercel
+```
+src/app/ducksaas/    platform admin console
+src/app/maskani/     landlord workspace
+src/app/portal/      tenant portal
+src/app/api/         auth, cron, payment webhooks
+src/lib/             auth, payments, email, telegram, notifications, org-settings
+prisma/              schema, migrations, seeds
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Deployment
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+See **[DEPLOYMENT.md](./DEPLOYMENT.md)** — Docker Compose VPS, Railway/Render, and Vercel+Neon paths, env var reference, and post-deploy checklist.
